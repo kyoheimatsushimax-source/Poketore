@@ -85,6 +85,23 @@ button:focus-visible{outline:3px solid var(--accent); outline-offset:2px;}
   border:8px solid transparent; border-right-color:var(--card); border-left:none;
 }
 
+input.field{
+  font-family:inherit; width:100%; margin-top:6px; padding:11px 14px;
+  border:1.5px solid var(--line); border-radius:14px; font-size:16px; font-weight:700;
+  color:var(--ink); background:var(--bg); outline:none;
+}
+input.field:focus{border-color:var(--accent);}
+.foodchip{
+  border:1px solid var(--line); background:var(--card); border-radius:999px;
+  padding:7px 12px; font-size:12px; font-weight:700; transition:transform .1s;
+}
+.foodchip:active{transform:scale(.94); background:var(--accent-soft);}
+.mealtab{
+  flex:1; padding:8px 0; border-radius:999px; font-size:13px; font-weight:800;
+  background:var(--card); border:1px solid var(--line); color:var(--sub);
+}
+.mealtab.on{background:var(--ink); color:#fff; border-color:var(--ink);}
+
 @keyframes pop{0%{transform:scale(.4);opacity:0}70%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
 @keyframes rise{0%{transform:translateY(14px);opacity:0}100%{transform:translateY(0);opacity:1}}
 @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
@@ -158,8 +175,63 @@ const stageOf = (level) => level >= 10 ? 5 : level >= 8 ? 4 : level >= 5 ? 3 : l
 
 const DEFAULT_DATA = {
   xp:0, streak:0, bestStreak:0, lastDate:null,
-  totalWorkouts:0, totalMinutes:0, history:[],
+  totalWorkouts:0, totalMinutes:0, totalBurn:0, history:[],
+  weightKg:60, targetKcal:2000, meals:[],
 };
+
+/* サーキットトレーニング(高強度自重)≒ 8METs での推定消費カロリー */
+const burnKcal = (minutes, weightKg) => Math.round(8 * (weightKg||60) * (minutes/60) * 1.05);
+
+/* 食事タイプ */
+const MEAL_TYPES = ["朝食","昼食","夕食","間食"];
+const guessMeal = () => { const h=new Date().getHours(); return h<10?"朝食":h<15?"昼食":h<21?"夕食":"間食"; };
+
+/* よくある食品のカロリー目安(kcal) */
+const FOODS = [
+  {cat:"主食", name:"ごはん 茶碗1杯", kcal:234},
+  {cat:"主食", name:"おにぎり 1個", kcal:180},
+  {cat:"主食", name:"食パン 6枚切1枚", kcal:160},
+  {cat:"主食", name:"かけうどん 1杯", kcal:320},
+  {cat:"主食", name:"ラーメン 1杯", kcal:500},
+  {cat:"主食", name:"カレーライス", kcal:760},
+  {cat:"主食", name:"ミートパスタ", kcal:600},
+  {cat:"主食", name:"牛丼 並盛", kcal:650},
+  {cat:"主食", name:"チャーハン", kcal:650},
+  {cat:"主食", name:"菓子パン 1個", kcal:400},
+  {cat:"主菜", name:"唐揚げ 3個", kcal:250},
+  {cat:"主菜", name:"焼き鮭 1切", kcal:130},
+  {cat:"主菜", name:"生姜焼き", kcal:350},
+  {cat:"主菜", name:"ハンバーグ", kcal:400},
+  {cat:"主菜", name:"目玉焼き 1個", kcal:90},
+  {cat:"主菜", name:"納豆 1パック", kcal:100},
+  {cat:"主菜", name:"冷奴 半丁", kcal:110},
+  {cat:"主菜", name:"刺身 盛り合わせ", kcal:150},
+  {cat:"主菜", name:"焼き鳥 3本", kcal:250},
+  {cat:"主菜", name:"餃子 6個", kcal:350},
+  {cat:"副菜", name:"味噌汁", kcal:50},
+  {cat:"副菜", name:"サラダ(ドレッシング込)", kcal:80},
+  {cat:"副菜", name:"ポテトサラダ", kcal:170},
+  {cat:"副菜", name:"きんぴらごぼう", kcal:80},
+  {cat:"副菜", name:"枝豆", kcal:100},
+  {cat:"間食", name:"ポテトチップス 1袋", kcal:330},
+  {cat:"間食", name:"チョコレート 数片", kcal:150},
+  {cat:"間食", name:"クッキー 2枚", kcal:100},
+  {cat:"間食", name:"アイスクリーム 1個", kcal:200},
+  {cat:"間食", name:"プリン 1個", kcal:130},
+  {cat:"間食", name:"シュークリーム 1個", kcal:230},
+  {cat:"間食", name:"りんご 1個", kcal:140},
+  {cat:"間食", name:"バナナ 1本", kcal:90},
+  {cat:"間食", name:"ヨーグルト 1個", kcal:80},
+  {cat:"間食", name:"ミックスナッツ ひとつかみ", kcal:180},
+  {cat:"飲み物", name:"ビール 350ml", kcal:140},
+  {cat:"飲み物", name:"ハイボール 1杯", kcal:70},
+  {cat:"飲み物", name:"缶チューハイ 350ml", kcal:180},
+  {cat:"飲み物", name:"コーラ 350ml", kcal:160},
+  {cat:"飲み物", name:"カフェラテ 1杯", kcal:120},
+  {cat:"飲み物", name:"オレンジジュース 1杯", kcal:90},
+  {cat:"飲み物", name:"牛乳 コップ1杯", kcal:130},
+];
+const FOOD_CATS = ["主食","主菜","副菜","間食","飲み物"];
 
 /* ---------- ユーティリティ ---------- */
 const pad = (n) => String(n).padStart(2,"0");
@@ -351,6 +423,7 @@ function App(){
     const xp = data.xp + gained;
     const newLv = levelFromXp(xp).level;
     const evolved = stageOf(newLv) > stageOf(prevLv);
+    const kcal = burnKcal(c.minutes, data.weightKg);
 
     const d = {
       ...data, xp, streak,
@@ -358,11 +431,12 @@ function App(){
       lastDate: today,
       totalWorkouts: data.totalWorkouts+1,
       totalMinutes: data.totalMinutes+c.minutes,
-      history: [...data.history, {date:today, minutes:c.minutes, xp:gained, course:c.label}].slice(-90),
+      totalBurn: (data.totalBurn||0)+kcal,
+      history: [...data.history, {date:today, minutes:c.minutes, xp:gained, kcal, course:c.label}].slice(-90),
     };
     saveData(d);
     setResult({
-      xp:gained, streakBonus, streak, minutes:c.minutes,
+      xp:gained, streakBonus, streak, minutes:c.minutes, kcal,
       leveledUp:newLv>prevLv, newLevel:newLv,
       evolved, newStage: STAGES[stageOf(newLv)-1],
     });
@@ -374,7 +448,9 @@ function App(){
   return (
     <div className="app">
       {screen==="home" && <Home data={data} course={course} setCourse={setCourse} todayMenu={todayMenu}
-        onStart={()=>setScreen("workout")} onStats={()=>setScreen("stats")} />}
+        onStart={()=>setScreen("workout")} onStats={()=>setScreen("stats")} onFood={()=>setScreen("food")}
+        saveSettings={(patch)=>saveData({...data, ...patch})} />}
+      {screen==="food" && <Food data={data} onBack={()=>setScreen("home")} onSave={saveData} />}
       {screen==="workout" && <Workout course={course} menu={todayMenu.slice(0,course.count)} level={levelFromXp(data.xp).level}
         onFinish={()=>finishWorkout(course)} onQuit={()=>setScreen("home")} />}
       {screen==="done" && <Done result={result} data={data} onHome={()=>setScreen("home")} />}
@@ -384,7 +460,10 @@ function App(){
 }
 
 /* ---------- ホーム ---------- */
-function Home({data, course, setCourse, todayMenu, onStart, onStats}){
+function Home({data, course, setCourse, todayMenu, onStart, onStats, onFood, saveSettings}){
+  const [showSet, setShowSet] = useState(false);
+  const [w, setW] = useState(String(data.weightKg||60));
+  const [t, setT] = useState(String(data.targetKcal||2000));
   const lv = levelFromXp(data.xp);
   const stage = stageOf(lv.level);
   const stageInfo = STAGES[stage-1];
@@ -413,7 +492,10 @@ function Home({data, course, setCourse, todayMenu, onStart, onStats}){
             {doneToday ? "今日もクリア済み 🎉" : "今日の5分、燃やそう"}
           </h1>
         </div>
-        <button onClick={onStats} aria-label="記録を見る" className="card" style={{padding:"10px 12px", borderRadius:16, fontSize:17}}>📊</button>
+        <div className="row" style={{gap:6}}>
+          <button onClick={()=>setShowSet(true)} aria-label="設定" className="card" style={{padding:"10px 12px", borderRadius:16, fontSize:17}}>⚙️</button>
+          <button onClick={onStats} aria-label="記録を見る" className="card" style={{padding:"10px 12px", borderRadius:16, fontSize:17}}>📊</button>
+        </div>
       </div>
 
       {/* キャラクター */}
@@ -467,6 +549,35 @@ function Home({data, course, setCourse, todayMenu, onStart, onStats}){
         ))}
       </div>
 
+      {/* 今日のカロリー */}
+      {(()=>{
+        const today = todayStr();
+        const intake = (data.meals||[]).filter(m=>m.date===today).reduce((a,m)=>a+m.kcal,0);
+        const burn = data.history.filter(h=>h.date===today).reduce((a,h)=>a+(h.kcal||0),0);
+        const target = data.targetKcal||2000;
+        const remain = target + burn - intake;
+        const frac = Math.min(1, intake/(target+burn||1));
+        return (
+          <button onClick={onFood} className="card" style={{padding:16, marginTop:12, textAlign:"left", width:"100%", display:"block"}}>
+            <div className="row" style={{justifyContent:"space-between"}}>
+              <span className="sub" style={{fontSize:12, fontWeight:800}}>🍽 今日のカロリー</span>
+              <span style={{fontSize:12, fontWeight:800, color:"var(--accent)"}}>記録する ›</span>
+            </div>
+            <div className="row" style={{gap:4, alignItems:"baseline", marginTop:4}}>
+              <span className="bebas" style={{fontSize:28, lineHeight:1}}>{intake}</span>
+              <span className="sub" style={{fontSize:12, fontWeight:800}}>/ {target+burn} kcal</span>
+              {burn>0 && <span style={{fontSize:11, fontWeight:800, color:"var(--teal)", marginLeft:4}}>(運動で +{burn})</span>}
+            </div>
+            <div style={{marginTop:8, height:10, borderRadius:999, background:"var(--accent-soft)", overflow:"hidden"}}>
+              <div style={{height:"100%", width:`${frac*100}%`, background:remain<0?"#D93025":"var(--accent)", borderRadius:999, transition:"width .5s"}}/>
+            </div>
+            <p className="sub" style={{fontSize:11, margin:"6px 0 0"}}>
+              {remain>=0 ? `あと ${remain} kcal 食べられます` : `${-remain} kcal オーバー。明日また調整しよう`}
+            </p>
+          </button>
+        );
+      })()}
+
       {/* コース */}
       <p className="sub" style={{fontSize:13, fontWeight:800, margin:"18px 0 8px"}}>コースを選ぶ</p>
       <div style={{display:"flex", flexDirection:"column", gap:8}}>
@@ -495,6 +606,29 @@ function Home({data, course, setCourse, todayMenu, onStart, onStats}){
       <p className="sub" style={{fontSize:11, textAlign:"center", margin:"8px 0 0"}}>
         30秒動く → 15秒休む を繰り返すだけ。無理せず自分のペースで。
       </p>
+
+      {/* 設定モーダル */}
+      {showSet && (
+        <div style={{position:"fixed", inset:0, background:"rgba(28,43,38,.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:50, padding:24}}
+          onClick={()=>setShowSet(false)}>
+          <div className="card anim-pop" style={{padding:22, width:"100%", maxWidth:340}} onClick={e=>e.stopPropagation()}>
+            <h3 style={{fontSize:18, fontWeight:800, margin:"0 0 14px"}}>⚙️ 設定</h3>
+            <label className="sub" style={{fontSize:12, fontWeight:800, display:"block"}}>体重(kg)— 消費カロリー計算に使用</label>
+            <input type="number" inputMode="decimal" value={w} onChange={e=>setW(e.target.value)} className="field"/>
+            <label className="sub" style={{fontSize:12, fontWeight:800, display:"block", marginTop:12}}>1日の目標摂取カロリー(kcal)</label>
+            <input type="number" inputMode="numeric" value={t} onChange={e=>setT(e.target.value)} className="field"/>
+            <p className="sub" style={{fontSize:11, margin:"10px 0 0", lineHeight:1.6}}>
+              ダイエット目的なら、普段の摂取量から300〜500kcalほど控えめが目安です。極端な制限は続かないので禁物!
+            </p>
+            <button onClick={()=>{
+              const wk = Math.max(25, Math.min(200, Number(w)||60));
+              const tk = Math.max(800, Math.min(5000, Number(t)||2000));
+              saveSettings({weightKg:wk, targetKcal:tk});
+              setShowSet(false);
+            }} className="btn-dark" style={{marginTop:16, fontSize:15, padding:13}}>保存する</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -670,6 +804,11 @@ function Done({result, data, onHome}){
         </div>
       </div>
 
+      <div className="card row" style={{width:"100%", padding:"13px 16px", marginTop:12, justifyContent:"space-between"}}>
+        <span className="sub" style={{fontSize:12, fontWeight:800}}>💦 推定消費カロリー</span>
+        <span><span className="bebas" style={{fontSize:26, color:"var(--teal)"}}>約{result.kcal}</span><span className="sub" style={{fontSize:12, fontWeight:800, marginLeft:3}}>kcal</span></span>
+      </div>
+
       <div className="card" style={{width:"100%", padding:16, marginTop:12}}>
         <p className="sub" style={{fontSize:12, fontWeight:800, margin:0}}>✨ 次のレベルまで</p>
         <div style={{marginTop:10, height:12, borderRadius:999, background:"var(--gold-soft)", overflow:"hidden"}}>
@@ -679,6 +818,137 @@ function Done({result, data, onHome}){
       </div>
 
       <button onClick={onHome} className="btn-dark" style={{marginTop:26}}>ホームに戻る</button>
+    </div>
+  );
+}
+
+/* ---------- 食事記録 ---------- */
+function Food({data, onBack, onSave}){
+  const [mealType, setMealType] = useState(guessMeal());
+  const [q, setQ] = useState("");
+  const [cname, setCname] = useState("");
+  const [ckcal, setCkcal] = useState("");
+  const [added, setAdded] = useState("");
+
+  const today = todayStr();
+  const meals = data.meals||[];
+  const todayMeals = meals.filter(m=>m.date===today);
+  const intake = todayMeals.reduce((a,m)=>a+m.kcal,0);
+  const burn = data.history.filter(h=>h.date===today).reduce((a,h)=>a+(h.kcal||0),0);
+  const target = data.targetKcal||2000;
+  const remain = target + burn - intake;
+  const frac = Math.min(1, intake/((target+burn)||1));
+
+  const cutoff = (()=>{ const d=new Date(); d.setDate(d.getDate()-60); return dateStrOf(d); })();
+
+  const addFood = (name, kcal) => {
+    if(!name || !(kcal>0)) return;
+    const entry = {id: Date.now()+"-"+Math.floor(Math.random()*1e6), date:today, meal:mealType, name, kcal:Math.round(kcal)};
+    onSave({...data, meals:[...meals.filter(m=>m.date>=cutoff), entry]});
+    setAdded(name); setTimeout(()=>setAdded(""), 1200);
+  };
+  const removeFood = (id) => onSave({...data, meals: meals.filter(m=>m.id!==id)});
+
+  const filtered = q ? FOODS.filter(f=>f.name.includes(q)) : null;
+
+  return (
+    <div className="anim-rise" style={{display:"flex", flexDirection:"column", flex:1}}>
+      <div className="row" style={{gap:10}}>
+        <button onClick={onBack} className="card" aria-label="戻る" style={{padding:"8px 12px", borderRadius:14, fontSize:15}}>◀</button>
+        <h1 style={{fontSize:23, fontWeight:800, margin:0}}>食事記録</h1>
+      </div>
+
+      {/* 今日の収支 */}
+      <div style={{background:"var(--ink)", color:"#fff", borderRadius:24, padding:"16px 20px", marginTop:14}}>
+        <div className="row" style={{justifyContent:"space-between", alignItems:"baseline"}}>
+          <span style={{fontSize:12, fontWeight:800, color:"rgba(255,255,255,.65)"}}>今日の摂取</span>
+          <span style={{fontSize:12, fontWeight:800, color:"rgba(255,255,255,.65)"}}>目標 {target}{burn>0?` + 運動 ${burn}`:""} kcal</span>
+        </div>
+        <div className="row" style={{gap:5, alignItems:"baseline", marginTop:2}}>
+          <span className="bebas" style={{fontSize:40, lineHeight:1}}>{intake}</span>
+          <span style={{fontSize:13, fontWeight:800, color:"rgba(255,255,255,.65)"}}>kcal</span>
+        </div>
+        <div style={{marginTop:10, height:10, borderRadius:999, background:"rgba(255,255,255,.15)", overflow:"hidden"}}>
+          <div style={{height:"100%", width:`${frac*100}%`, background:remain<0?"#FF6B5E":"var(--gold)", borderRadius:999, transition:"width .5s"}}/>
+        </div>
+        <p style={{fontSize:12, fontWeight:800, margin:"8px 0 0", color:remain<0?"#FFB4AC":"rgba(255,255,255,.8)"}}>
+          {remain>=0 ? `あと ${remain} kcal 食べられます` : `${-remain} kcal オーバー`}
+        </p>
+      </div>
+
+      {/* 食事タイプ */}
+      <div className="row" style={{gap:6, marginTop:14}}>
+        {MEAL_TYPES.map(m=>(
+          <button key={m} onClick={()=>setMealType(m)} className={"mealtab"+(mealType===m?" on":"")}>{m}</button>
+        ))}
+      </div>
+
+      {/* 検索 */}
+      <input className="field" placeholder="食べたものを検索(例:ごはん、ビール)" value={q} onChange={e=>setQ(e.target.value)} style={{marginTop:10}}/>
+      {added && <p className="anim-pop" style={{fontSize:12, fontWeight:800, color:"var(--teal)", margin:"8px 0 0", textAlign:"center"}}>✓ 「{added}」を{mealType}に追加しました</p>}
+
+      {/* 食品リスト */}
+      {filtered ? (
+        <div className="row" style={{flexWrap:"wrap", gap:6, marginTop:10}}>
+          {filtered.length===0 && <p className="sub" style={{fontSize:12}}>見つかりません。下の欄から自由入力で追加できます</p>}
+          {filtered.map((f,i)=>(
+            <button key={i} className="foodchip" onClick={()=>addFood(f.name, f.kcal)}>{f.name} <span style={{color:"var(--accent)"}}>{f.kcal}</span></button>
+          ))}
+        </div>
+      ) : (
+        <div style={{marginTop:6}}>
+          {FOOD_CATS.map(cat=>(
+            <div key={cat}>
+              <p className="sub" style={{fontSize:12, fontWeight:800, margin:"12px 0 6px"}}>{cat}</p>
+              <div className="row" style={{flexWrap:"wrap", gap:6}}>
+                {FOODS.filter(f=>f.cat===cat).map((f,i)=>(
+                  <button key={i} className="foodchip" onClick={()=>addFood(f.name, f.kcal)}>{f.name} <span style={{color:"var(--accent)"}}>{f.kcal}</span></button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 自由入力 */}
+      <p className="sub" style={{fontSize:12, fontWeight:800, margin:"16px 0 4px"}}>リストにないものを追加</p>
+      <div className="row" style={{gap:6}}>
+        <input className="field" placeholder="品名" value={cname} onChange={e=>setCname(e.target.value)} style={{marginTop:0, flex:2}}/>
+        <input className="field" type="number" inputMode="numeric" placeholder="kcal" value={ckcal} onChange={e=>setCkcal(e.target.value)} style={{marginTop:0, flex:1}}/>
+        <button onClick={()=>{ addFood(cname.trim(), Number(ckcal)); setCname(""); setCkcal(""); }}
+          style={{padding:"11px 16px", borderRadius:14, background:"var(--accent)", color:"#fff", fontWeight:800, fontSize:14, flexShrink:0}}>追加</button>
+      </div>
+
+      {/* 今日のログ */}
+      {todayMeals.length>0 && (
+        <>
+          <p className="sub" style={{fontSize:12, fontWeight:800, margin:"18px 0 6px"}}>今日食べたもの</p>
+          <div style={{display:"flex", flexDirection:"column", gap:6, paddingBottom:8}}>
+            {MEAL_TYPES.map(mt=>{
+              const items = todayMeals.filter(m=>m.meal===mt);
+              if(items.length===0) return null;
+              return (
+                <div key={mt} className="card" style={{padding:"10px 14px", borderRadius:18}}>
+                  <p className="sub" style={{fontSize:11, fontWeight:800, margin:"0 0 4px"}}>{mt} — {items.reduce((a,m)=>a+m.kcal,0)} kcal</p>
+                  {items.map(m=>(
+                    <div key={m.id} className="row" style={{justifyContent:"space-between", padding:"3px 0"}}>
+                      <span style={{fontSize:13, fontWeight:700}}>{m.name}</span>
+                      <span className="row" style={{gap:8}}>
+                        <span style={{fontSize:13, fontWeight:800, color:"var(--accent)"}}>{m.kcal}</span>
+                        <button onClick={()=>removeFood(m.id)} aria-label="削除" className="sub" style={{fontSize:13}}>✕</button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      <p className="sub" style={{fontSize:10, lineHeight:1.6, margin:"14px 0 4px"}}>
+        ※ カロリーは一般的な目安による推定値です。正確な管理が必要な場合は栄養成分表示をご確認ください。
+      </p>
     </div>
   );
 }
@@ -732,8 +1002,8 @@ function Stats({data, onBack}){
         })}
       </div>
 
-      <div className="grid3" style={{marginTop:12}}>
-        {[["合計回数",data.totalWorkouts,"回"],["合計時間",data.totalMinutes,"分"],["最長連続",data.bestStreak,"日"]].map((s,i)=>(
+      <div className="grid2" style={{marginTop:12}}>
+        {[["合計回数",data.totalWorkouts,"回"],["合計時間",data.totalMinutes,"分"],["最長連続",data.bestStreak,"日"],["累計消費",data.totalBurn||0,"kcal"]].map((s,i)=>(
           <div key={i} className="card" style={{padding:"12px 8px", textAlign:"center"}}>
             <p className="sub" style={{fontSize:11, fontWeight:800, margin:0}}>{s[0]}</p>
             <p style={{margin:"2px 0 0"}}>
@@ -769,7 +1039,10 @@ function Stats({data, onBack}){
                   <p style={{fontSize:14, fontWeight:800, margin:0}}>{h.course}</p>
                   <p className="sub" style={{fontSize:11, margin:0}}>{h.date}</p>
                 </div>
-                <span style={{fontSize:14, fontWeight:800, color:"var(--gold)"}}>+{h.xp} XP</span>
+                <span style={{textAlign:"right"}}>
+                  <span style={{fontSize:14, fontWeight:800, color:"var(--gold)", display:"block"}}>+{h.xp} XP</span>
+                  {h.kcal>0 && <span style={{fontSize:11, fontWeight:800, color:"var(--teal)"}}>約{h.kcal} kcal</span>}
+                </span>
               </div>
             ))}
           </div>
