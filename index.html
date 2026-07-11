@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ポケトレ — 5分燃焼パーソナルトレーナー</title>
+
+<!-- iPhoneホーム画面アプリ化 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ポケトレ">
+<meta name="theme-color" content="#F3F5EF">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Bebas+Neue&display=swap" rel="stylesheet">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+
+<style>
+:root{
+  --bg:#F3F5EF; --card:#FFFFFF; --ink:#1C2B26; --sub:#6B7A73;
+  --accent:#FF5A2D; --accent-soft:#FFE9E1;
+  --teal:#0E7C66; --teal-soft:#DCF2EC;
+  --gold:#FFB020; --gold-soft:#FFF3DB; --line:#E3E8E1;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent; touch-action:manipulation;}
+html,body{margin:0; padding:0; background:var(--bg);}
+body{
+  font-family:'M PLUS Rounded 1c', system-ui, sans-serif;
+  color:var(--ink); overscroll-behavior:none;
+  -webkit-user-select:none; user-select:none;
+}
+#root{min-height:100dvh;}
+.app{
+  max-width:430px; margin:0 auto; min-height:100dvh;
+  display:flex; flex-direction:column;
+  padding: calc(14px + env(safe-area-inset-top)) 20px calc(18px + env(safe-area-inset-bottom));
+}
+button{font-family:inherit; border:none; cursor:pointer; color:inherit; background:none; padding:0;}
+button:focus-visible{outline:3px solid var(--accent); outline-offset:2px;}
+
+.card{background:var(--card); border:1px solid var(--line); border-radius:24px;}
+.sub{color:var(--sub);}
+.bebas{font-family:'Bebas Neue', sans-serif; letter-spacing:.02em;}
+
+.row{display:flex; align-items:center;}
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+.grid3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;}
+
+.btn-start{
+  width:100%; border-radius:999px; padding:16px; margin-top:14px;
+  background:var(--accent); color:#fff; font-weight:800; font-size:18px;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  box-shadow:0 8px 24px rgba(255,90,45,.35); transition:transform .1s;
+}
+.btn-start:active{transform:scale(.96);}
+.btn-dark{
+  width:100%; border-radius:999px; padding:16px; background:var(--ink);
+  color:#fff; font-weight:800; font-size:18px; transition:transform .1s;
+}
+.btn-dark:active{transform:scale(.96);}
+
+.course{
+  text-align:left; border-radius:22px; padding:14px 16px; width:100%;
+  background:var(--card); border:1px solid var(--line); transition:all .15s;
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+}
+.course.on{background:var(--ink); color:#fff; border-color:var(--ink);}
+.chip{font-size:12px; font-weight:800; padding:4px 10px; border-radius:999px; white-space:nowrap;}
+
+.bubble{
+  position:relative; background:var(--card); border:1px solid var(--line);
+  border-radius:18px; padding:10px 14px; font-size:13px; font-weight:700;
+  max-width:230px; line-height:1.5;
+}
+.bubble:after{
+  content:""; position:absolute; left:-8px; top:50%; transform:translateY(-50%);
+  border:8px solid transparent; border-right-color:var(--card); border-left:none;
+}
+
+@keyframes pop{0%{transform:scale(.4);opacity:0}70%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
+@keyframes rise{0%{transform:translateY(14px);opacity:0}100%{transform:translateY(0);opacity:1}}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@keyframes flame{0%,100%{transform:scale(1) rotate(-2deg)}50%{transform:scale(1.12) rotate(3deg)}}
+@keyframes cheer{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-5px) rotate(3deg)}}
+.anim-rise{animation:rise .35s ease-out;}
+.anim-pop{animation:pop .35s ease-out;}
+.bob{animation:bob 2.6s ease-in-out infinite;}
+.cheering{animation:cheer .7s ease-in-out infinite;}
+@media (prefers-reduced-motion: reduce){*{animation:none !important; transition:none !important;}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const {useState, useEffect, useRef, useMemo} = React;
+
+/* ============================================================
+   ポケトレ v2 — キャラ「メラ」と一緒に育つ5〜10分燃焼トレーナー
+   ============================================================ */
+
+const STORAGE_KEY = "pocket-trainer-v1";
+
+/* ---------- 保存(Claude内は window.storage、iPhoneでは localStorage) ---------- */
+const store = {
+  async get(k){
+    if (window.storage) { try { const r = await window.storage.get(k); if (r && r.value != null) return r.value; } catch(e){} }
+    try { const v = localStorage.getItem(k); if (v != null) return v; } catch(e){}
+    return null;
+  },
+  async set(k, v){
+    if (window.storage) { try { await window.storage.set(k, v); } catch(e){} }
+    try { localStorage.setItem(k, v); } catch(e){}
+  },
+};
+
+/* ---------- データ ---------- */
+const EXERCISES = [
+  { name:"ジャンピングジャック", tip:"手足を大きく開いてリズミカルに", emoji:"🤸" },
+  { name:"スクワット", tip:"お尻を後ろに引き、膝はつま先の向きに", emoji:"🦵" },
+  { name:"もも上げ(ハイニー)", tip:"太ももを腰の高さまで、その場で全力", emoji:"🏃" },
+  { name:"マウンテンクライマー", tip:"体幹を固めて膝を胸に引き寄せる", emoji:"⛰️" },
+  { name:"プランク", tip:"頭からかかとまで一直線をキープ", emoji:"🧱" },
+  { name:"ゆるバーピー", tip:"ジャンプなしでOK。立つ→しゃがむ→脚を伸ばす", emoji:"💥" },
+  { name:"フロントランジ", tip:"上体はまっすぐ、左右交互に一歩前へ", emoji:"🚶" },
+  { name:"膝つき腕立て", tip:"胸を床に近づける。膝つきで十分効く", emoji:"💪" },
+  { name:"バイシクルクランチ", tip:"肘と反対側の膝をタッチするイメージ", emoji:"🚴" },
+  { name:"スケータージャンプ", tip:"左右に大きくサイドジャンプ", emoji:"⛸️" },
+  { name:"ヒップリフト", tip:"お尻をキュッと締めて持ち上げる", emoji:"🌉" },
+  { name:"その場ジョギング", tip:"肩の力を抜いて軽やかに弾む", emoji:"👟" },
+];
+
+const COURSES = [
+  { id:"5", label:"サクッと5分", desc:"スキマ時間の定番", count:6, work:30, rest:15, minutes:5 },
+  { id:"8", label:"しっかり8分", desc:"汗ばむ燃焼コース", count:10, work:30, rest:15, minutes:8 },
+  { id:"10", label:"本気の10分", desc:"今日のごほうび前に", count:12, work:30, rest:15, minutes:10 },
+];
+
+const TITLES = ["かけだし","ビギナー","ルーキー","チャレンジャー","ファイター","バーナー","アスリート","エキスパート","マスター","チャンピオン","レジェンド"];
+
+/* キャラ「メラ」の進化ステージ */
+const STAGES = [
+  { stage:1, name:"たまご",       lv:1,  desc:"なにかが眠っている…" },
+  { stage:2, name:"ひだね",       lv:3,  desc:"小さな火が生まれた!" },
+  { stage:3, name:"メラ",         lv:5,  desc:"元気いっぱいの炎の子" },
+  { stage:4, name:"ブレイズ",     lv:8,  desc:"鉢巻きを締めた熱血ファイター" },
+  { stage:5, name:"フェニックス", lv:10, desc:"翼と王冠をもつ伝説の炎" },
+];
+const stageOf = (level) => level >= 10 ? 5 : level >= 8 ? 4 : level >= 5 ? 3 : level >= 3 ? 2 : 1;
+
+const DEFAULT_DATA = {
+  xp:0, streak:0, bestStreak:0, lastDate:null,
+  totalWorkouts:0, totalMinutes:0, history:[],
+};
+
+/* ---------- ユーティリティ ---------- */
+const pad = (n) => String(n).padStart(2,"0");
+const todayStr = () => { const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+const dateStrOf = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+function hashSeed(str){ let h=1779033703; for(let i=0;i<str.length;i++){ h=Math.imul(h^str.charCodeAt(i),3432918353); h=(h<<13)|(h>>>19);} return h>>>0; }
+function seededShuffle(arr, seed){
+  const a=[...arr]; let s=seed;
+  const rnd=()=>{ s=(s*1664525+1013904223)>>>0; return s/4294967296; };
+  for(let i=a.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+function pick(arr, seed){ return arr[hashSeed(String(seed)) % arr.length]; }
+
+function levelFromXp(xp){
+  let level=1, need=100, rest=xp;
+  while(rest>=need){ rest-=need; level+=1; need=level*100; }
+  return {level, into:rest, need};
+}
+
+/* ---------- ビープ音 ---------- */
+function useBeeper(){
+  const ctxRef = useRef(null);
+  const ensure = () => {
+    if(!ctxRef.current){ const AC = window.AudioContext||window.webkitAudioContext; if(AC) ctxRef.current = new AC(); }
+    if(ctxRef.current && ctxRef.current.state==="suspended") ctxRef.current.resume();
+    return ctxRef.current;
+  };
+  const beep = (freq=880, dur=0.12, vol=0.25) => {
+    const ctx = ensure(); if(!ctx) return;
+    const osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.type="sine"; osc.frequency.value=freq;
+    gain.gain.setValueAtTime(vol, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+dur);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime+dur);
+  };
+  return {beep, ensure};
+}
+
+/* ============================================================
+   キャラクター「メラ」
+   stage: 1たまご 2ひだね 3メラ 4ブレイズ 5フェニックス
+   mood: happy / fired / rest / sleepy
+   ============================================================ */
+function Mela({stage=1, mood="happy", size=150, cheering=false}){
+  const bodyColor = stage>=4 ? "#FF3D2E" : stage>=3 ? "#FF5A2D" : "#FFB020";
+  const innerColor = stage>=4 ? "#FFD34D" : stage>=3 ? "#FFB020" : "#FFE38A";
+
+  const Face = ({y=0}) => {
+    if(mood==="sleepy") return (
+      <g transform={`translate(0 ${y})`}>
+        <path d="M84 118 h14" stroke="#2B1B16" strokeWidth="5" strokeLinecap="round"/>
+        <path d="M102 118 h14" stroke="#2B1B16" strokeWidth="5" strokeLinecap="round"/>
+        <circle cx="100" cy="134" r="5" fill="#2B1B16"/>
+        <text x="138" y="96" fontSize="16" fontWeight="800" fill="#8A96A3">z z</text>
+      </g>
+    );
+    if(mood==="rest") return (
+      <g transform={`translate(0 ${y})`}>
+        <path d="M82 116 q9 8 18 0" stroke="#2B1B16" strokeWidth="5" strokeLinecap="round" fill="none"/>
+        <path d="M100 116 q9 8 18 0" stroke="#2B1B16" strokeWidth="5" strokeLinecap="round" fill="none"/>
+        <path d="M88 134 q12 10 24 0" stroke="#2B1B16" strokeWidth="5" strokeLinecap="round" fill="none"/>
+      </g>
+    );
+    if(mood==="fired") return (
+      <g transform={`translate(0 ${y})`}>
+        <path d="M78 106 l16 7" stroke="#2B1B16" strokeWidth="5" strokeLinecap="round"/>
+        <path d="M122 106 l-16 7" stroke="#2B1B16" strokeWidth="5" strokeLinecap="round"/>
+        <circle cx="90" cy="121" r="6" fill="#2B1B16"/>
+        <circle cx="110" cy="121" r="6" fill="#2B1B16"/>
+        <path d="M88 134 q12 14 24 0 z" fill="#2B1B16"/>
+      </g>
+    );
+    return ( /* happy */
+      <g transform={`translate(0 ${y})`}>
+        <ellipse cx="89" cy="118" rx="6.5" ry="9" fill="#2B1B16"/>
+        <ellipse cx="111" cy="118" rx="6.5" ry="9" fill="#2B1B16"/>
+        <circle cx="91" cy="115" r="2.4" fill="#fff"/>
+        <circle cx="113" cy="115" r="2.4" fill="#fff"/>
+        <path d="M90 136 q10 9 20 0" stroke="#2B1B16" strokeWidth="5" strokeLinecap="round" fill="none"/>
+        <circle cx="74" cy="130" r="6" fill="#FFB59E"/>
+        <circle cx="126" cy="130" r="6" fill="#FFB59E"/>
+      </g>
+    );
+  };
+
+  const flamePath = "M100 34 C 121 64, 153 86, 153 127 A 53 53 0 0 1 47 127 C 47 86, 79 64, 100 34 Z";
+  const innerPath = "M100 92 C 110 106, 126 116, 126 137 A 26 26 0 0 1 74 137 C 74 116, 90 106, 100 92 Z";
+
+  return (
+    <div className={cheering ? "cheering" : "bob"} style={{width:size, height:size}}>
+      <svg viewBox="0 0 200 200" width={size} height={size} aria-label={`キャラクター メラ(ステージ${stage})`}>
+        {/* 影 */}
+        <ellipse cx="100" cy="176" rx="46" ry="9" fill="rgba(28,43,38,.10)"/>
+
+        {stage===1 ? (
+          <g>
+            <ellipse cx="100" cy="122" rx="52" ry="60" fill="#FFF6E4" stroke="#F0E3C8" strokeWidth="3"/>
+            <circle cx="80" cy="104" r="8" fill="#FFD9A6"/>
+            <circle cx="118" cy="140" r="10" fill="#FFD9A6"/>
+            <circle cx="112" cy="98" r="5" fill="#FFD9A6"/>
+            {/* 頭の小さな火 */}
+            <path d="M100 40 C 106 50, 114 56, 114 68 A 14 14 0 0 1 86 68 C 86 56, 94 50, 100 40 Z" fill="#FFB020"/>
+            <Face y={4}/>
+          </g>
+        ) : (
+          <g transform={stage===2 ? "translate(100 116) scale(0.78) translate(-100 -108)" : ""}>
+            {/* 翼(フェニックス) */}
+            {stage>=5 && (
+              <g fill="#FF9F2E" opacity="0.95">
+                <path d="M50 118 C 20 100, 12 70, 22 48 C 34 72, 44 84, 58 92 Z"/>
+                <path d="M150 118 C 180 100, 188 70, 178 48 C 166 72, 156 84, 142 92 Z"/>
+              </g>
+            )}
+            <path d={flamePath} fill={bodyColor}/>
+            <path d={innerPath} fill={innerColor}/>
+            {/* 腕(メラ以降) */}
+            {stage>=3 && (
+              <g stroke={bodyColor} strokeWidth="13" strokeLinecap="round">
+                {stage>=4
+                  ? <><path d="M52 128 q-16 -8 -14 -26" fill="none"/><path d="M148 128 q16 -8 14 -26" fill="none"/></>
+                  : <><path d="M54 132 q-14 6 -18 16" fill="none"/><path d="M146 132 q14 6 18 16" fill="none"/></>}
+              </g>
+            )}
+            {/* 鉢巻き(ブレイズ以降) */}
+            {stage>=4 && (
+              <g>
+                <path d="M62 98 Q100 86 138 98 L136 110 Q100 99 64 110 Z" fill="#fff" stroke="#E7E0D2" strokeWidth="1.5"/>
+                <circle cx="100" cy="100" r="5.5" fill="#FF3D2E"/>
+              </g>
+            )}
+            {/* 王冠(フェニックス) */}
+            {stage>=5 && (
+              <path d="M84 40 L90 26 L100 38 L110 26 L116 40 Z" fill="#FFD34D" stroke="#E8B60F" strokeWidth="2"/>
+            )}
+            <Face y={0}/>
+          </g>
+        )}
+      </svg>
+    </div>
+  );
+}
+
+/* メラのセリフ */
+const LINES = {
+  notDone: ["今日も一緒に燃えよう!🔥","5分だけ、どう?","動くとボクも育つよ!","スキマ時間、いまがチャンス!"],
+  done: ["今日はバッチリ!えらい!","ナイスファイト!ゆっくり休んでね"],
+  comeback: ["おかえり!また今日から一緒にがんばろ!"],
+  ready: ["いくよ〜!準備して!"],
+  work: ["いいぞいいぞ!","その調子!","あと少し、ふんばれ!","ボクも燃えてきた!🔥"],
+  rest: ["ふう、水分とってね","深呼吸〜","次もいけるよ!"],
+};
+
+/* ============================================================
+   メイン
+   ============================================================ */
+function App(){
+  const [screen, setScreen] = useState("home");
+  const [data, setData] = useState(DEFAULT_DATA);
+  const [loaded, setLoaded] = useState(false);
+  const [course, setCourse] = useState(COURSES[0]);
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      const v = await store.get(STORAGE_KEY);
+      if(v){ try{ setData({...DEFAULT_DATA, ...JSON.parse(v)}); }catch(e){} }
+      setLoaded(true);
+    })();
+  }, []);
+
+  const saveData = async (d) => { setData(d); await store.set(STORAGE_KEY, JSON.stringify(d)); };
+
+  const todayMenu = useMemo(() => seededShuffle(EXERCISES, hashSeed(todayStr())), []);
+
+  const finishWorkout = (c) => {
+    const today = todayStr();
+    const prevLv = levelFromXp(data.xp).level;
+
+    let streak = data.streak;
+    if(data.lastDate !== today){
+      const y = new Date(); y.setDate(y.getDate()-1);
+      streak = data.lastDate === dateStrOf(y) ? data.streak + 1 : 1;
+    }
+    const streakBonus = Math.min(streak,10)*3;
+    const gained = c.minutes*10 + streakBonus;
+    const xp = data.xp + gained;
+    const newLv = levelFromXp(xp).level;
+    const evolved = stageOf(newLv) > stageOf(prevLv);
+
+    const d = {
+      ...data, xp, streak,
+      bestStreak: Math.max(data.bestStreak, streak),
+      lastDate: today,
+      totalWorkouts: data.totalWorkouts+1,
+      totalMinutes: data.totalMinutes+c.minutes,
+      history: [...data.history, {date:today, minutes:c.minutes, xp:gained, course:c.label}].slice(-90),
+    };
+    saveData(d);
+    setResult({
+      xp:gained, streakBonus, streak, minutes:c.minutes,
+      leveledUp:newLv>prevLv, newLevel:newLv,
+      evolved, newStage: STAGES[stageOf(newLv)-1],
+    });
+    setScreen("done");
+  };
+
+  if(!loaded) return <div className="app" style={{justifyContent:"center", alignItems:"center"}}><span className="sub">読み込み中…</span></div>;
+
+  return (
+    <div className="app">
+      {screen==="home" && <Home data={data} course={course} setCourse={setCourse} todayMenu={todayMenu}
+        onStart={()=>setScreen("workout")} onStats={()=>setScreen("stats")} />}
+      {screen==="workout" && <Workout course={course} menu={todayMenu.slice(0,course.count)} level={levelFromXp(data.xp).level}
+        onFinish={()=>finishWorkout(course)} onQuit={()=>setScreen("home")} />}
+      {screen==="done" && <Done result={result} data={data} onHome={()=>setScreen("home")} />}
+      {screen==="stats" && <Stats data={data} onBack={()=>setScreen("home")} />}
+    </div>
+  );
+}
+
+/* ---------- ホーム ---------- */
+function Home({data, course, setCourse, todayMenu, onStart, onStats}){
+  const lv = levelFromXp(data.xp);
+  const stage = stageOf(lv.level);
+  const stageInfo = STAGES[stage-1];
+  const title = TITLES[Math.min(lv.level-1, TITLES.length-1)];
+  const doneToday = data.lastDate === todayStr();
+
+  const yesterday = (()=>{ const d=new Date(); d.setDate(d.getDate()-1); return dateStrOf(d); })();
+  const streakLost = data.totalWorkouts>0 && data.lastDate!==todayStr() && data.lastDate!==yesterday;
+  const line = doneToday ? pick(LINES.done, todayStr()+"d")
+    : streakLost ? LINES.comeback[0]
+    : pick(LINES.notDone, todayStr());
+  const mood = doneToday ? "rest" : streakLost ? "sleepy" : "happy";
+
+  const week = [...Array(7)].map((_,i)=>{
+    const d=new Date(); d.setDate(d.getDate()-(6-i));
+    const ds=dateStrOf(d);
+    return {label:"日月火水木金土"[d.getDay()], done:data.history.some(h=>h.date===ds), isToday:ds===todayStr()};
+  });
+
+  return (
+    <div className="anim-rise" style={{display:"flex", flexDirection:"column", flex:1}}>
+      <div className="row" style={{justifyContent:"space-between", alignItems:"flex-start"}}>
+        <div>
+          <p className="sub" style={{fontSize:13, margin:0}}>Lv.{lv.level} {title}</p>
+          <h1 style={{fontSize:23, fontWeight:800, margin:"2px 0 0", letterSpacing:"-.01em"}}>
+            {doneToday ? "今日もクリア済み 🎉" : "今日の5分、燃やそう"}
+          </h1>
+        </div>
+        <button onClick={onStats} aria-label="記録を見る" className="card" style={{padding:"10px 12px", borderRadius:16, fontSize:17}}>📊</button>
+      </div>
+
+      {/* キャラクター */}
+      <div className="row" style={{gap:6, marginTop:14, justifyContent:"center"}}>
+        <Mela stage={stage} mood={mood} size={150}/>
+        <div>
+          <div className="bubble">{line}</div>
+          <p className="sub" style={{fontSize:11, margin:"8px 0 0 6px"}}>
+            {stageInfo.name}(ステージ{stage}/5)<br/>{stageInfo.desc}
+          </p>
+        </div>
+      </div>
+
+      {/* ストリーク & XP */}
+      <div className="grid2" style={{marginTop:12}}>
+        <div className="card" style={{padding:16}}>
+          <div className="row" style={{gap:6}}>
+            <span style={{fontSize:16, display:"inline-block", animation:data.streak>0?"flame 1.6s ease-in-out infinite":"none"}}>🔥</span>
+            <span className="sub" style={{fontSize:12, fontWeight:800}}>連続記録</span>
+          </div>
+          <div className="row" style={{gap:4, alignItems:"baseline", marginTop:2}}>
+            <span className="bebas" style={{fontSize:38, color:"var(--accent)", lineHeight:1}}>{data.streak}</span>
+            <span className="sub" style={{fontSize:13, fontWeight:800}}>日</span>
+          </div>
+          <p className="sub" style={{fontSize:11, margin:"3px 0 0"}}>自己ベスト {data.bestStreak}日</p>
+        </div>
+        <div className="card" style={{padding:16}}>
+          <div className="row" style={{gap:6}}>
+            <span style={{fontSize:15}}>⚡</span>
+            <span className="sub" style={{fontSize:12, fontWeight:800}}>経験値</span>
+          </div>
+          <div style={{marginTop:12, height:12, borderRadius:999, background:"var(--gold-soft)", overflow:"hidden"}}>
+            <div style={{height:"100%", width:`${Math.min(100,(lv.into/lv.need)*100)}%`, background:"var(--gold)", borderRadius:999, transition:"width .5s"}}/>
+          </div>
+          <p className="sub" style={{fontSize:11, margin:"6px 0 0"}}>あと {lv.need-lv.into} XP でレベルアップ</p>
+        </div>
+      </div>
+
+      {/* 今週 */}
+      <div className="card row" style={{padding:14, marginTop:12, justifyContent:"space-between"}}>
+        {week.map((w,i)=>(
+          <div key={i} style={{display:"flex", flexDirection:"column", alignItems:"center", gap:5}}>
+            <span style={{fontSize:11, fontWeight:800, color:w.isToday?"var(--accent)":"var(--sub)"}}>{w.label}</span>
+            <div style={{
+              width:27, height:27, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center",
+              background:w.done?"var(--accent)":"transparent",
+              border:w.done?"none":`2px ${w.isToday?"solid":"dashed"} ${w.isToday?"var(--accent)":"var(--line)"}`,
+              color:"#fff", fontSize:14, fontWeight:800,
+            }}>{w.done?"✓":""}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* コース */}
+      <p className="sub" style={{fontSize:13, fontWeight:800, margin:"18px 0 8px"}}>コースを選ぶ</p>
+      <div style={{display:"flex", flexDirection:"column", gap:8}}>
+        {COURSES.map(c=>{
+          const on = course.id===c.id;
+          return (
+            <button key={c.id} onClick={()=>setCourse(c)} className={"course"+(on?" on":"")}>
+              <div>
+                <span style={{fontWeight:800}}>{c.label}</span>
+                <span style={{fontSize:12, marginLeft:8, color:on?"rgba(255,255,255,.7)":"var(--sub)"}}>{c.desc}</span>
+              </div>
+              <span className="chip" style={{background:on?"rgba(255,255,255,.15)":"var(--accent-soft)", color:on?"#fff":"var(--accent)"}}>{c.count}種目</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="sub" style={{fontSize:11, lineHeight:1.7, margin:"10px 0 0"}}>
+        今日のメニュー: {todayMenu.slice(0,course.count).map(e=>e.name).join("・")}(毎日入れ替わります)
+      </p>
+
+      <div style={{flex:1}}/>
+      <button onClick={onStart} className="btn-start">
+        ▶ {doneToday ? "もう1本いく" : "ワークアウト開始"}
+      </button>
+      <p className="sub" style={{fontSize:11, textAlign:"center", margin:"8px 0 0"}}>
+        30秒動く → 15秒休む を繰り返すだけ。無理せず自分のペースで。
+      </p>
+    </div>
+  );
+}
+
+/* ---------- ワークアウト ---------- */
+function Workout({course, menu, level, onFinish, onQuit}){
+  const phases = useMemo(()=>{
+    const p=[{type:"ready", duration:10, ex:menu[0]}];
+    menu.forEach((ex,i)=>{
+      p.push({type:"work", duration:course.work, ex});
+      if(i<menu.length-1) p.push({type:"rest", duration:course.rest, ex:menu[i+1]});
+    });
+    return p;
+  },[course, menu]);
+
+  const [idx, setIdx] = useState(0);
+  const [secLeft, setSecLeft] = useState(phases[0].duration);
+  const [paused, setPaused] = useState(false);
+  const [quitArmed, setQuitArmed] = useState(false);
+  const {beep, ensure} = useBeeper();
+  const finishedRef = useRef(false);
+
+  useEffect(()=>{ ensure(); },[]);
+
+  /* 画面スリープ防止(対応端末のみ) */
+  useEffect(()=>{
+    let wl=null;
+    (async()=>{ try{ if(navigator.wakeLock) wl = await navigator.wakeLock.request("screen"); }catch(e){} })();
+    return ()=>{ try{ wl && wl.release(); }catch(e){} };
+  },[]);
+
+  useEffect(()=>{
+    if(paused) return;
+    const id=setInterval(()=>setSecLeft(s=>s-1),1000);
+    return ()=>clearInterval(id);
+  },[paused, idx]);
+
+  useEffect(()=>{
+    if(secLeft>0 && secLeft<=3) beep(880,0.1);
+    if(secLeft<=0){
+      if(idx>=phases.length-1){
+        if(!finishedRef.current){ finishedRef.current=true; beep(1320,0.4,0.3); onFinish(); }
+      }else{
+        beep(phases[idx+1].type==="work"?1320:660, 0.2, 0.3);
+        setIdx(idx+1); setSecLeft(phases[idx+1].duration);
+      }
+    }
+  },[secLeft]);
+
+  const phase = phases[idx];
+  const isWork = phase.type==="work";
+  const isReady = phase.type==="ready";
+  const color = isWork ? "var(--accent)" : "var(--teal)";
+  const softColor = isWork ? "var(--accent-soft)" : "var(--teal-soft)";
+  const workDone = phases.slice(0,idx).filter(p=>p.type==="work").length;
+  const totalWork = menu.length;
+
+  const R=112, C=2*Math.PI*R;
+  const frac = Math.max(0,secLeft)/phase.duration;
+
+  const cheer = isReady ? LINES.ready[0]
+    : isWork ? pick(LINES.work, phase.ex.name+idx)
+    : pick(LINES.rest, idx);
+
+  const skip = () => {
+    if(idx>=phases.length-1){ if(!finishedRef.current){ finishedRef.current=true; onFinish(); } }
+    else{ setIdx(idx+1); setSecLeft(phases[idx+1].duration); }
+  };
+
+  return (
+    <div style={{display:"flex", flexDirection:"column", flex:1, margin:"-14px -20px -18px", padding:"calc(14px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom))", background:softColor, transition:"background .4s"}}>
+      <div className="row" style={{justifyContent:"space-between"}}>
+        <button onClick={()=>quitArmed?onQuit():setQuitArmed(true)}
+          style={{padding:"8px 14px", borderRadius:999, fontSize:14, fontWeight:800,
+            background:quitArmed?"var(--ink)":"rgba(255,255,255,.75)", color:quitArmed?"#fff":"var(--ink)"}}>
+          {quitArmed?"タップで終了する":"✕"}
+        </button>
+        <span style={{fontSize:14, fontWeight:800}}>{workDone+(isWork?1:0)} / {totalWork} 種目</span>
+        <div style={{width:60}}/>
+      </div>
+
+      <div className="row" style={{gap:4, marginTop:10}}>
+        {menu.map((_,i)=>(
+          <div key={i} style={{flex:1, height:6, borderRadius:999, background:i<workDone+(isWork?1:0)?color:"rgba(255,255,255,.85)"}}/>
+        ))}
+      </div>
+
+      <div style={{textAlign:"center", marginTop:18}}>
+        <span style={{display:"inline-block", padding:"6px 16px", borderRadius:999, fontSize:14, fontWeight:800, letterSpacing:".06em", background:color, color:"#fff"}}>
+          {isReady?"スタート準備":isWork?"🔥 ワーク":"😮‍💨 休憩"}
+        </span>
+        <h2 key={phase.ex.name+phase.type} className="anim-pop" style={{fontSize:26, fontWeight:800, margin:"12px 0 0", lineHeight:1.4}}>
+          {(isReady||phase.type==="rest") && <span className="sub" style={{display:"block", fontSize:14, fontWeight:700}}>次の種目</span>}
+          {phase.ex.emoji} {phase.ex.name}
+        </h2>
+        <p className="sub" style={{fontSize:13, margin:"6px 24px 0"}}>{phase.ex.tip}</p>
+      </div>
+
+      {/* タイマーリング */}
+      <div style={{flex:1, display:"flex", alignItems:"center", justifyContent:"center", margin:"6px 0"}}>
+        <div style={{position:"relative", width:256, height:256}}>
+          <svg width="256" height="256" viewBox="0 0 256 256" style={{transform:"rotate(-90deg)"}}>
+            <circle cx="128" cy="128" r={R} fill="none" stroke="rgba(255,255,255,.9)" strokeWidth="15"/>
+            <circle cx="128" cy="128" r={R} fill="none" stroke={color} strokeWidth="15" strokeLinecap="round"
+              strokeDasharray={C} strokeDashoffset={C*(1-frac)}
+              style={{transition:"stroke-dashoffset 1s linear, stroke .4s"}}/>
+          </svg>
+          <div style={{position:"absolute", inset:0, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center"}}>
+            <span className="bebas" style={{fontSize:84, lineHeight:1}}>{Math.max(0,secLeft)}</span>
+            <span className="sub" style={{fontSize:13, fontWeight:800, marginTop:-2}}>秒</span>
+          </div>
+        </div>
+      </div>
+
+      {/* メラの応援 */}
+      <div className="row" style={{justifyContent:"center", gap:4, marginBottom:8}}>
+        <Mela stage={stageOf(level)} mood={isWork?"fired":"rest"} size={78} cheering={isWork && !paused}/>
+        <div className="bubble" style={{fontSize:12}}>{paused?"ひと休みも大事!":cheer}</div>
+      </div>
+
+      <div className="row" style={{justifyContent:"center", gap:16}}>
+        <button onClick={()=>setPaused(!paused)} aria-label={paused?"再開":"一時停止"}
+          style={{width:76, height:76, borderRadius:"50%", background:"var(--ink)", color:"#fff", fontSize:26, boxShadow:"0 8px 20px rgba(28,43,38,.3)"}}>
+          {paused?"▶":"⏸"}
+        </button>
+        <button onClick={skip} aria-label="スキップ"
+          style={{width:54, height:54, borderRadius:"50%", background:"rgba(255,255,255,.9)", fontSize:20}}>
+          ⏭
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- 完了 ---------- */
+function Done({result, data, onHome}){
+  const lv = levelFromXp(data.xp);
+  const stage = stageOf(lv.level);
+  const title = TITLES[Math.min(lv.level-1, TITLES.length-1)];
+  return (
+    <div className="anim-rise" style={{display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", flex:1, textAlign:"center", paddingBottom:16}}>
+      <Mela stage={stage} mood="fired" size={result.evolved?190:150} cheering={true}/>
+
+      {result.evolved ? (
+        <div className="anim-pop" style={{marginTop:6}}>
+          <span className="chip" style={{background:"var(--gold)", color:"#fff", fontSize:14, padding:"6px 16px"}}>✨ 進化!</span>
+          <h2 style={{fontSize:26, fontWeight:800, margin:"10px 0 0"}}>メラが「{result.newStage.name}」に進化した!</h2>
+          <p className="sub" style={{fontSize:13, margin:"4px 0 0"}}>{result.newStage.desc}</p>
+        </div>
+      ) : (
+        <>
+          <h2 style={{fontSize:28, fontWeight:800, margin:"8px 0 0"}}>ワークアウト完了!</h2>
+          <p className="sub" style={{fontSize:13, margin:"4px 0 0"}}>{result.minutes}分、しっかり燃やしました</p>
+        </>
+      )}
+
+      {result.leveledUp && !result.evolved && (
+        <div className="anim-pop chip" style={{marginTop:14, background:"var(--gold-soft)", color:"#9A6700", fontSize:14, padding:"8px 18px"}}>
+          🏆 レベルアップ! Lv.{result.newLevel} {title}
+        </div>
+      )}
+
+      <div className="grid2" style={{width:"100%", marginTop:22}}>
+        <div className="card" style={{padding:16}}>
+          <p className="sub" style={{fontSize:12, fontWeight:800, margin:0}}>⚡ 獲得XP</p>
+          <p className="bebas" style={{fontSize:30, margin:"4px 0 0"}}>+{result.xp}</p>
+          <p className="sub" style={{fontSize:11, margin:0}}>うち連続ボーナス +{result.streakBonus}</p>
+        </div>
+        <div className="card" style={{padding:16}}>
+          <p className="sub" style={{fontSize:12, fontWeight:800, margin:0}}>🔥 連続記録</p>
+          <p className="bebas" style={{fontSize:30, margin:"4px 0 0", color:"var(--accent)"}}>{result.streak}日</p>
+          <p className="sub" style={{fontSize:11, margin:0}}>明日も続けてボーナスUP</p>
+        </div>
+      </div>
+
+      <div className="card" style={{width:"100%", padding:16, marginTop:12}}>
+        <p className="sub" style={{fontSize:12, fontWeight:800, margin:0}}>✨ 次のレベルまで</p>
+        <div style={{marginTop:10, height:12, borderRadius:999, background:"var(--gold-soft)", overflow:"hidden"}}>
+          <div style={{height:"100%", width:`${(lv.into/lv.need)*100}%`, background:"var(--gold)", borderRadius:999, transition:"width .8s"}}/>
+        </div>
+        <p className="sub" style={{fontSize:11, margin:"6px 0 0"}}>あと {lv.need-lv.into} XP</p>
+      </div>
+
+      <button onClick={onHome} className="btn-dark" style={{marginTop:26}}>ホームに戻る</button>
+    </div>
+  );
+}
+
+/* ---------- 記録 ---------- */
+function Stats({data, onBack}){
+  const lv = levelFromXp(data.xp);
+  const stage = stageOf(lv.level);
+  const title = TITLES[Math.min(lv.level-1, TITLES.length-1)];
+  const days = [...Array(7)].map((_,i)=>{
+    const d=new Date(); d.setDate(d.getDate()-(6-i));
+    const ds=dateStrOf(d);
+    return {label:`${d.getMonth()+1}/${d.getDate()}`, minutes:data.history.filter(h=>h.date===ds).reduce((a,h)=>a+h.minutes,0)};
+  });
+  const maxMin = Math.max(10, ...days.map(d=>d.minutes));
+
+  return (
+    <div className="anim-rise" style={{display:"flex", flexDirection:"column", flex:1}}>
+      <div className="row" style={{gap:10}}>
+        <button onClick={onBack} className="card" aria-label="戻る" style={{padding:"8px 12px", borderRadius:14, fontSize:15}}>◀</button>
+        <h1 style={{fontSize:23, fontWeight:800, margin:0}}>これまでの記録</h1>
+      </div>
+
+      {/* ランク */}
+      <div style={{background:"var(--ink)", color:"#fff", borderRadius:24, padding:"18px 20px", marginTop:16, textAlign:"center"}}>
+        <p style={{fontSize:12, fontWeight:800, color:"rgba(255,255,255,.6)", margin:0}}>現在のランク</p>
+        <p style={{fontSize:26, fontWeight:800, margin:"4px 0 0"}}>Lv.{lv.level} {title}</p>
+        <p style={{fontSize:12, color:"rgba(255,255,255,.6)", margin:"2px 0 0"}}>累計 {data.xp} XP</p>
+      </div>
+
+      {/* メラの成長 */}
+      <p className="sub" style={{fontSize:13, fontWeight:800, margin:"18px 0 8px"}}>メラの成長</p>
+      <div className="card" style={{padding:"14px 16px"}}>
+        {STAGES.map((s,i)=>{
+          const reached = stage >= s.stage;
+          const current = stage === s.stage;
+          return (
+            <div key={i} className="row" style={{gap:10, padding:"7px 0", opacity:reached?1:.45}}>
+              <div style={{
+                width:30, height:30, borderRadius:"50%", flexShrink:0,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                background:reached?"var(--accent)":"var(--line)", color:"#fff", fontSize:15, fontWeight:800,
+              }}>{reached?"🔥":"?"}</div>
+              <div style={{flex:1}}>
+                <span style={{fontSize:14, fontWeight:800}}>{s.name}</span>
+                <span className="sub" style={{fontSize:11, marginLeft:8}}>{reached?s.desc:`Lv.${s.lv}で進化`}</span>
+              </div>
+              {current && <span className="chip" style={{background:"var(--accent-soft)", color:"var(--accent)"}}>いまここ</span>}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid3" style={{marginTop:12}}>
+        {[["合計回数",data.totalWorkouts,"回"],["合計時間",data.totalMinutes,"分"],["最長連続",data.bestStreak,"日"]].map((s,i)=>(
+          <div key={i} className="card" style={{padding:"12px 8px", textAlign:"center"}}>
+            <p className="sub" style={{fontSize:11, fontWeight:800, margin:0}}>{s[0]}</p>
+            <p style={{margin:"2px 0 0"}}>
+              <span className="bebas" style={{fontSize:26}}>{s[1]}</span>
+              <span className="sub" style={{fontSize:11, marginLeft:2}}>{s[2]}</span>
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <p className="sub" style={{fontSize:13, fontWeight:800, margin:"18px 0 8px"}}>直近7日間の運動時間</p>
+      <div className="card" style={{padding:16}}>
+        <div className="row" style={{alignItems:"flex-end", gap:8, height:130}}>
+          {days.map((d,i)=>(
+            <div key={i} style={{flex:1, height:"100%", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"flex-end", gap:4}}>
+              {d.minutes>0 && <span style={{fontSize:10, fontWeight:800, color:"var(--accent)"}}>{d.minutes}</span>}
+              <div style={{width:"100%", borderRadius:"8px 8px 0 0",
+                height:`${(d.minutes/maxMin)*100}%`, minHeight:d.minutes>0?8:3,
+                background:d.minutes>0?"var(--accent)":"var(--line)", transition:"height .5s"}}/>
+              <span className="sub" style={{fontSize:10, fontWeight:800}}>{d.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {data.history.length>0 ? (
+        <>
+          <p className="sub" style={{fontSize:13, fontWeight:800, margin:"18px 0 8px"}}>最近のワークアウト</p>
+          <div style={{display:"flex", flexDirection:"column", gap:8, paddingBottom:8}}>
+            {[...data.history].reverse().slice(0,8).map((h,i)=>(
+              <div key={i} className="card row" style={{padding:"11px 16px", borderRadius:18, justifyContent:"space-between"}}>
+                <div>
+                  <p style={{fontSize:14, fontWeight:800, margin:0}}>{h.course}</p>
+                  <p className="sub" style={{fontSize:11, margin:0}}>{h.date}</p>
+                </div>
+                <span style={{fontSize:14, fontWeight:800, color:"var(--gold)"}}>+{h.xp} XP</span>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <p className="sub" style={{fontSize:13, textAlign:"center", marginTop:28}}>まだ記録がありません。最初の1本から始めましょう!</p>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>

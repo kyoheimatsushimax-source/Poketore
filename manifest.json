@@ -1,0 +1,13 @@
+{
+  "name": "ポケトレ",
+  "short_name": "ポケトレ",
+  "description": "5〜10分の脂肪燃焼サーキット。キャラ「メラ」と一緒に育つパーソナルトレーナー",
+  "display": "standalone",
+  "start_url": ".",
+  "background_color": "#F3F5EF",
+  "theme_color": "#FF5A2D",
+  "icons": [
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
