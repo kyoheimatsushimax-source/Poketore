@@ -22,6 +22,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
 <style>
 :root{
@@ -401,6 +402,269 @@ function Mela({stage=1, mood="happy", size=150, cheering=false}){
   );
 }
 
+/* ============================================================
+   3D動作デモ(Three.js)
+   関節付きの人型フィギュアを組み立て、種目ごとの動きをループ再生
+   ============================================================ */
+const SIDE_VIEW = new Set(["マウンテンクライマー","プランク","膝つき腕立て","バイシクルクランチ","ヒップリフト"]);
+
+function buildFigure(THREE){
+  const orange = new THREE.MeshStandardMaterial({color:0xFF5A2D, roughness:.55});
+  const gold   = new THREE.MeshStandardMaterial({color:0xFFB020, roughness:.55});
+  const dark   = new THREE.MeshStandardMaterial({color:0x1C2B26, roughness:.6});
+
+  /* 関節を原点とし、-y方向に伸びるパーツ。tipが末端の取り付け点 */
+  const seg = (r1, r2, h, mat) => {
+    const g = new THREE.Group();
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, h, 10), mat);
+    m.position.y = -h/2; g.add(m);
+    g.add(new THREE.Mesh(new THREE.SphereGeometry(r1*1.06, 10, 8), mat));
+    const tip = new THREE.Group(); tip.position.y = -h; g.add(tip);
+    return {g, tip};
+  };
+
+  const root = new THREE.Group(); root.position.y = 0.95;
+  const pelvis = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 10), orange);
+  pelvis.scale.set(1.15, 0.8, 0.85); root.add(pelvis);
+
+  const torso = new THREE.Group(); root.add(torso);
+  const chest = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.125, 0.5, 12), orange);
+  chest.position.y = 0.3; torso.add(chest);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.145, 14, 12), gold);
+  head.position.y = 0.73; torso.add(head);
+  const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 8), dark);
+  const eyeR = eyeL.clone();
+  eyeL.position.set(-0.05, 0.76, 0.125); eyeR.position.set(0.05, 0.76, 0.125);
+  torso.add(eyeL); torso.add(eyeR);
+
+  const mkArm = (sx) => {
+    const sh = new THREE.Group(); sh.position.set(sx*0.225, 0.52, 0); torso.add(sh);
+    const up = seg(0.052, 0.046, 0.27, orange); sh.add(up.g);
+    const el = new THREE.Group(); up.tip.add(el);
+    const fo = seg(0.046, 0.04, 0.25, orange); el.add(fo.g);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), gold);
+    fo.tip.add(hand);
+    return {sh, el};
+  };
+  const armL = mkArm(-1), armR = mkArm(1);
+
+  const mkLeg = (sx) => {
+    const hip = new THREE.Group(); hip.position.set(sx*0.115, -0.06, 0); root.add(hip);
+    const th = seg(0.072, 0.056, 0.4, orange); hip.add(th.g);
+    const knee = new THREE.Group(); th.tip.add(knee);
+    const sh2 = seg(0.052, 0.045, 0.4, orange); knee.add(sh2.g);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.095, 0.06, 0.21), dark);
+    foot.position.set(0, -0.015, 0.055); sh2.tip.add(foot);
+    return {hip, knee};
+  };
+  const legL = mkLeg(-1), legR = mkLeg(1);
+
+  return {
+    root, torso,
+    shL:armL.sh, shR:armR.sh, elL:armL.el, elR:armR.el,
+    hipL:legL.hip, hipR:legR.hip, kneeL:legL.knee, kneeR:legR.knee,
+  };
+}
+
+function resetPose(f){
+  f.root.position.set(0, 0.95, 0);
+  f.root.rotation.set(0, 0, 0);
+  [f.torso, f.shL, f.shR, f.elL, f.elR, f.hipL, f.hipR, f.kneeL, f.kneeR]
+    .forEach(o => o.rotation.set(0, 0, 0));
+  f.shL.rotation.z = -0.12; f.shR.rotation.z = 0.12; /* 気をつけの姿勢 */
+}
+
+/* キーフレーム線形補間(バーピー用) */
+function lerpKeys(keys, u){
+  for(let i=0; i<keys.length-1; i++){
+    if(u >= keys[i].u && u <= keys[i+1].u){
+      const a=keys[i].p, b=keys[i+1].p;
+      const s=(u-keys[i].u)/(keys[i+1].u-keys[i].u);
+      const out={};
+      Object.keys(a).forEach(k => out[k] = a[k] + (b[k]-a[k])*s);
+      return out;
+    }
+  }
+  return keys[0].p;
+}
+
+const POSES = {
+  "ジャンピングジャック": (f,t)=>{
+    const u=(Math.sin(t*7)+1)/2;
+    f.shL.rotation.z=-(0.12+u*2.7); f.shR.rotation.z=0.12+u*2.7;
+    f.hipL.rotation.z=-u*0.5; f.hipR.rotation.z=u*0.5;
+    f.root.position.y=0.95+Math.max(0,Math.sin(t*7))*0.1;
+  },
+  "スクワット": (f,t)=>{
+    const c=(1-Math.cos(t*3))/2;
+    f.hipL.rotation.x=f.hipR.rotation.x=-1.5*c;
+    f.kneeL.rotation.x=f.kneeR.rotation.x=1.9*c;
+    f.root.position.y=0.95-0.34*c;
+    f.torso.rotation.x=0.45*c;
+    f.shL.rotation.x=f.shR.rotation.x=-1.25*c;
+  },
+  "もも上げ(ハイニー)": (f,t)=>{
+    const a=Math.max(0,Math.sin(t*7)), b=Math.max(0,-Math.sin(t*7));
+    f.hipL.rotation.x=-1.5*a; f.kneeL.rotation.x=1.4*a+0.1;
+    f.hipR.rotation.x=-1.5*b; f.kneeR.rotation.x=1.4*b+0.1;
+    f.shL.rotation.x=0.5*a-0.9*b; f.shR.rotation.x=0.5*b-0.9*a;
+    f.elL.rotation.x=f.elR.rotation.x=-1.15;
+    f.root.position.y=0.95+0.03*Math.abs(Math.sin(t*7));
+  },
+  "マウンテンクライマー": (f,t)=>{
+    f.root.position.y=0.52; f.root.rotation.x=1.25;
+    f.shL.rotation.x=f.shR.rotation.x=-1.05;
+    f.torso.rotation.x=0.1;
+    const a=Math.max(0,Math.sin(t*8)), b=Math.max(0,-Math.sin(t*8));
+    f.hipL.rotation.x=-1.35*a+0.15; f.kneeL.rotation.x=1.6*a;
+    f.hipR.rotation.x=-1.35*b+0.15; f.kneeR.rotation.x=1.6*b;
+  },
+  "プランク": (f,t)=>{
+    f.root.position.y=0.52+Math.sin(t*2)*0.008;
+    f.root.rotation.x=1.3;
+    f.shL.rotation.x=f.shR.rotation.x=-1.05;
+    f.hipL.rotation.x=f.hipR.rotation.x=0.13;
+    f.torso.rotation.x=0.08;
+  },
+  "ゆるバーピー": (f,t)=>{
+    const keys=[
+      {u:0.00, p:{ry:0.95, rx:0,    tx:0,    shx:0,     hip:0,     knee:0   }},
+      {u:0.22, p:{ry:0.55, rx:0.15, tx:0.9,  shx:-1.9,  hip:-1.7,  knee:2.1 }},
+      {u:0.45, p:{ry:0.52, rx:1.25, tx:0.05, shx:-1.05, hip:0.12,  knee:0.1 }},
+      {u:0.68, p:{ry:0.55, rx:0.15, tx:0.9,  shx:-1.9,  hip:-1.7,  knee:2.1 }},
+      {u:0.88, p:{ry:0.95, rx:0,    tx:0,    shx:0,     hip:0,     knee:0   }},
+      {u:1.00, p:{ry:0.95, rx:0,    tx:0,    shx:0,     hip:0,     knee:0   }},
+    ];
+    const p=lerpKeys(keys,(t%3.4)/3.4);
+    f.root.position.y=p.ry; f.root.rotation.x=p.rx; f.torso.rotation.x=p.tx;
+    f.shL.rotation.x=f.shR.rotation.x=p.shx;
+    f.hipL.rotation.x=f.hipR.rotation.x=p.hip;
+    f.kneeL.rotation.x=f.kneeR.rotation.x=p.knee;
+  },
+  "フロントランジ": (f,t)=>{
+    const s=Math.sin(t*2.2), m=Math.abs(s), L=s>0;
+    const fr=L?f.hipL:f.hipR, frK=L?f.kneeL:f.kneeR;
+    const bk=L?f.hipR:f.hipL, bkK=L?f.kneeR:f.kneeL;
+    fr.rotation.x=-1.05*m; frK.rotation.x=1.05*m;
+    bk.rotation.x=0.45*m;  bkK.rotation.x=1.15*m;
+    f.root.position.y=0.95-0.28*m;
+    f.torso.rotation.x=0.12*m;
+    f.shL.rotation.x=(L?-0.5:0.4)*m; f.shR.rotation.x=(L?0.4:-0.5)*m;
+  },
+  "膝つき腕立て": (f,t)=>{
+    const c=(1-Math.cos(t*3))/2;
+    f.root.position.y=0.6-0.1*c; f.root.rotation.x=0.95+0.13*c;
+    f.hipL.rotation.x=f.hipR.rotation.x=-0.55;
+    f.kneeL.rotation.x=f.kneeR.rotation.x=1.75;
+    f.shL.rotation.x=f.shR.rotation.x=-0.75-0.18*c;
+    f.elL.rotation.x=f.elR.rotation.x=-(0.15+c*1.15);
+  },
+  "バイシクルクランチ": (f,t)=>{
+    f.root.position.y=0.33; f.root.rotation.x=-1.45;
+    const a=Math.sin(t*5);
+    f.hipL.rotation.x=-1.1-0.5*a; f.kneeL.rotation.x=1.2-0.9*a;
+    f.hipR.rotation.x=-1.1+0.5*a; f.kneeR.rotation.x=1.2+0.9*a;
+    f.torso.rotation.x=0.5; f.torso.rotation.y=0.25*a;
+    f.shL.rotation.z=-2.55; f.shR.rotation.z=2.55;
+    f.elL.rotation.x=f.elR.rotation.x=-1.3;
+  },
+  "スケータージャンプ": (f,t)=>{
+    const s=Math.sin(t*3.5);
+    f.root.position.x=0.35*s;
+    f.root.position.y=0.9+0.07*Math.abs(Math.cos(t*3.5));
+    f.root.rotation.z=-0.13*s;
+    f.torso.rotation.x=0.35;
+    f.hipL.rotation.z=0.3*s; f.hipR.rotation.z=0.3*s;
+    f.kneeL.rotation.x=f.kneeR.rotation.x=0.55;
+    f.shL.rotation.x=-0.6-0.5*s; f.shR.rotation.x=-0.6+0.5*s;
+    f.elL.rotation.x=f.elR.rotation.x=-0.9;
+  },
+  "ヒップリフト": (f,t)=>{
+    const c=(1-Math.cos(t*2.4))/2;
+    f.root.position.y=0.3+0.17*c;
+    f.root.rotation.x=-1.5+0.55*c;
+    f.hipL.rotation.x=f.hipR.rotation.x=-0.9+0.3*c;
+    f.kneeL.rotation.x=f.kneeR.rotation.x=1.9-0.35*c;
+    f.shL.rotation.z=-0.35; f.shR.rotation.z=0.35;
+  },
+  "その場ジョギング": (f,t)=>{
+    const a=Math.max(0,Math.sin(t*6)), b=Math.max(0,-Math.sin(t*6));
+    f.hipL.rotation.x=-0.7*a+0.15*b; f.kneeL.rotation.x=1.0*a+0.12;
+    f.hipR.rotation.x=-0.7*b+0.15*a; f.kneeR.rotation.x=1.0*b+0.12;
+    f.shL.rotation.x=0.5*a-0.7*b; f.shR.rotation.x=0.5*b-0.7*a;
+    f.elL.rotation.x=f.elR.rotation.x=-1.2;
+    f.root.position.y=0.95+0.02*Math.abs(Math.sin(t*6));
+  },
+};
+
+/* 3Dデモモーダル */
+function ExerciseDemo({name, onClose}){
+  const ref = useRef(null);
+  const ex = EXERCISES.find(e => e.name === name);
+
+  useEffect(()=>{
+    const THREE = window.THREE;
+    if(!THREE || !ref.current) return;
+    const W = Math.min(330, window.innerWidth - 88), H = W * 0.92;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xF3F5EF);
+    const camera = new THREE.PerspectiveCamera(42, W/H, 0.1, 50);
+    if(SIDE_VIEW.has(name)) camera.position.set(3.3, 1.25, 1.1);
+    else camera.position.set(1.15, 1.5, 3.7);
+    camera.lookAt(0, 0.8, 0);
+
+    const renderer = new THREE.WebGLRenderer({antialias:true});
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+    renderer.setSize(W, H);
+    ref.current.appendChild(renderer.domElement);
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xD8DCD2, 0.95));
+    const dl = new THREE.DirectionalLight(0xffffff, 0.7);
+    dl.position.set(2, 4, 3); scene.add(dl);
+
+    const ground = new THREE.Mesh(
+      new THREE.CircleGeometry(1.7, 40),
+      new THREE.MeshStandardMaterial({color:0xE3E8E1, roughness:1})
+    );
+    ground.rotation.x = -Math.PI/2; scene.add(ground);
+
+    const fig = buildFigure(THREE);
+    scene.add(fig.root);
+    const pose = POSES[name] || POSES["その場ジョギング"];
+
+    let raf; const t0 = performance.now();
+    const loop = () => {
+      const t = (performance.now() - t0) / 1000;
+      resetPose(fig);
+      pose(fig, t);
+      renderer.render(scene, camera);
+      raf = requestAnimationFrame(loop);
+    };
+    loop();
+    return () => {
+      cancelAnimationFrame(raf);
+      renderer.dispose();
+      if(ref.current) ref.current.innerHTML = "";
+    };
+  }, [name]);
+
+  return (
+    <div style={{position:"fixed", inset:0, background:"rgba(28,43,38,.55)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:60, padding:22}}
+      onClick={onClose}>
+      <div className="card anim-pop" style={{padding:18, width:"100%", maxWidth:380, textAlign:"center"}} onClick={e=>e.stopPropagation()}>
+        <h3 style={{fontSize:18, fontWeight:800, margin:"0 0 2px"}}>{ex ? ex.emoji : "🏃"} {name}</h3>
+        {ex && <p className="sub" style={{fontSize:12, margin:"0 0 10px"}}>{ex.tip}</p>}
+        <div ref={ref} style={{display:"flex", justifyContent:"center", borderRadius:18, overflow:"hidden", border:"1px solid var(--line)"}}>
+          {!window.THREE && <p className="sub" style={{fontSize:12, padding:30}}>3D表示を読み込めませんでした(通信環境をご確認ください)</p>}
+        </div>
+        <p className="sub" style={{fontSize:10, margin:"8px 0 0"}}>※ 動きのイメージです。実際は無理のない範囲・正しいフォームで行ってください</p>
+        <button onClick={onClose} className="btn-dark" style={{marginTop:12, fontSize:15, padding:12}}>閉じる</button>
+      </div>
+    </div>
+  );
+}
+
 /* メラのセリフ */
 const LINES = {
   notDone: ["今日も一緒に燃えよう!🔥","5分だけ、どう?","動くとボクも育つよ!","スキマ時間、いまがチャンス!"],
@@ -489,6 +753,7 @@ function Home({data, course, setCourse, todayMenu, onStart, onStats, onFood, sav
   const [w, setW] = useState(String(data.weightKg||60));
   const [t, setT] = useState(String(data.targetKcal||2000));
   const [wIn, setWIn] = useState("");
+  const [demo, setDemo] = useState(null);
   const lv = levelFromXp(data.xp);
   const stage = stageOf(lv.level);
   const stageInfo = STAGES[stage-1];
@@ -651,9 +916,13 @@ function Home({data, course, setCourse, todayMenu, onStart, onStats, onFood, sav
         })}
       </div>
 
-      <p className="sub" style={{fontSize:11, lineHeight:1.7, margin:"10px 0 0"}}>
-        今日のメニュー: {todayMenu.slice(0,course.count).map(e=>e.name).join("・")}(毎日入れ替わります)
-      </p>
+      <p className="sub" style={{fontSize:11, margin:"12px 0 6px"}}>今日のメニュー(タップで動きを3Dプレビュー・毎日入れ替わります)</p>
+      <div className="row" style={{flexWrap:"wrap", gap:6}}>
+        {todayMenu.slice(0,course.count).map((e,i)=>(
+          <button key={i} className="foodchip" onClick={()=>setDemo(e.name)}>{e.emoji} {e.name}</button>
+        ))}
+      </div>
+      {demo && <ExerciseDemo name={demo} onClose={()=>setDemo(null)}/>}
 
       <div style={{flex:1}}/>
       <button onClick={onStart} className="btn-start">
@@ -704,6 +973,7 @@ function Workout({course, menu, level, onFinish, onQuit}){
   const [secLeft, setSecLeft] = useState(phases[0].duration);
   const [paused, setPaused] = useState(false);
   const [quitArmed, setQuitArmed] = useState(false);
+  const [demo, setDemo] = useState(null);
   const {beep, ensure} = useBeeper();
   const finishedRef = useRef(false);
 
@@ -781,6 +1051,10 @@ function Workout({course, menu, level, onFinish, onQuit}){
           {phase.ex.emoji} {phase.ex.name}
         </h2>
         <p className="sub" style={{fontSize:13, margin:"6px 24px 0"}}>{phase.ex.tip}</p>
+        <button onClick={()=>{ setPaused(true); setDemo(phase.ex.name); }}
+          style={{marginTop:8, padding:"7px 16px", borderRadius:999, fontSize:12, fontWeight:800, background:"rgba(255,255,255,.85)", color:"var(--ink)", border:"1px solid var(--line)"}}>
+          🎥 動きを3Dで見る
+        </button>
       </div>
 
       {/* タイマーリング */}
@@ -815,6 +1089,8 @@ function Workout({course, menu, level, onFinish, onQuit}){
           ⏭
         </button>
       </div>
+
+      {demo && <ExerciseDemo name={demo} onClose={()=>setDemo(null)}/>}
     </div>
   );
 }
@@ -883,7 +1159,6 @@ function Food({data, onBack, onSave}){
   const [viewDate, setViewDate] = useState(todayStr());
   const [mealType, setMealType] = useState(guessMeal());
   const [q, setQ] = useState("");
-  const [cname, setCname] = useState("");
   const [ckcal, setCkcal] = useState("");
   const [kcalTouched, setKcalTouched] = useState(false);
   const [added, setAdded] = useState("");
@@ -946,20 +1221,34 @@ function Food({data, onBack, onSave}){
     setWIn("");
   };
 
-  /* 品名入力でカロリー自動補完 */
-  const suggestion = cname.trim().length >= 1
-    ? FOODS.find(f => f.name.includes(cname.trim()) || cname.trim().includes(f.name.split(" ")[0]))
-    : null;
-  const onCnameChange = (v) => {
-    setCname(v);
-    if(!kcalTouched){
-      const s = v.trim().length >= 1 ? FOODS.find(f => f.name.includes(v.trim())) : null;
-      setCkcal(s ? String(s.kcal) : "");
-    }
-    if(v === "") { setKcalTouched(false); setCkcal(""); }
+  /* 表記ゆれに強い正規化(全角半角・ひらがな→カタカナ・空白除去) */
+  const norm = (s) => (s||"").normalize("NFKC").replace(/\s+/g,"")
+    .replace(/[ぁ-ん]/g, ch => String.fromCharCode(ch.charCodeAt(0)+0x60));
+
+  const matchFoods = (v) => {
+    const nq = norm(v);
+    if(!nq) return [];
+    const hit = FOODS.filter(f => norm(f.name).includes(nq));
+    if(hit.length) return hit;
+    /* 「牛丼大盛」→「牛丼 並盛」のように、入力がDB名の先頭語を含む場合も拾う */
+    return FOODS.filter(f => {
+      const head = norm(f.name.split(" ")[0]);
+      return head.length >= 2 && nq.includes(head);
+    });
   };
 
-  const filtered = q ? FOODS.filter(f => f.name.includes(q)) : null;
+  const matches = matchFoods(q);
+  const best = matches[0] || null;
+
+  /* 検索欄への入力でカロリーを自動補完 */
+  const onQChange = (v) => {
+    setQ(v);
+    if(v.trim() === ""){ setKcalTouched(false); setCkcal(""); return; }
+    if(!kcalTouched){
+      const m = matchFoods(v)[0];
+      setCkcal(m ? String(m.kcal) : "");
+    }
+  };
 
   return (
     <div className="anim-rise" style={{display:"flex", flexDirection:"column", flex:1}}>
@@ -1039,16 +1328,31 @@ function Food({data, onBack, onSave}){
         ))}
       </div>
 
-      {/* 検索 */}
-      <input className="field" placeholder="食べたものを検索(例:ごはん、ビール)" value={q} onChange={e=>setQ(e.target.value)} style={{marginTop:10}}/>
+      {/* 検索・入力(kcal自動補完) */}
+      <input className="field" placeholder="食べたものを入力(例:ごはん、牛丼、ビール)" value={q} onChange={e=>onQChange(e.target.value)} style={{marginTop:10}}/>
       {added && <p className="anim-pop" style={{fontSize:12, fontWeight:800, color:"var(--teal)", margin:"8px 0 0", textAlign:"center"}}>✓ 「{added}」を{dateLabel}の{mealType}に追加しました</p>}
 
+      {/* 入力中:この内容で追加 */}
+      {q.trim() !== "" && (
+        <div className="card" style={{padding:"12px 14px", marginTop:10}}>
+          {best && !kcalTouched
+            ? <p className="sub" style={{fontSize:11, margin:"0 0 6px"}}>💡 「{best.name}」の目安 <b style={{color:"var(--accent)"}}>{best.kcal} kcal</b> を自動入力しました(修正できます)</p>
+            : !best && <p className="sub" style={{fontSize:11, margin:"0 0 6px"}}>データベースに近い候補がありません。kcalを入力してください</p>}
+          <div className="row" style={{gap:6}}>
+            <span style={{flex:2, fontSize:14, fontWeight:800, padding:"11px 4px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{q.trim()}</span>
+            <input className="field" type="number" inputMode="numeric" placeholder="kcal" value={ckcal}
+              onChange={e=>{ setCkcal(e.target.value); setKcalTouched(true); }} style={{marginTop:0, flex:1}}/>
+            <button onClick={()=>{ addFood(q.trim(), Number(ckcal)); setQ(""); setCkcal(""); setKcalTouched(false); }}
+              style={{padding:"11px 16px", borderRadius:14, background:"var(--accent)", color:"#fff", fontWeight:800, fontSize:14, flexShrink:0}}>追加</button>
+          </div>
+        </div>
+      )}
+
       {/* 食品リスト */}
-      {filtered ? (
+      {q.trim() !== "" ? (
         <div className="row" style={{flexWrap:"wrap", gap:6, marginTop:10}}>
-          {filtered.length===0 && <p className="sub" style={{fontSize:12}}>見つかりません。下の欄に品名を入力すると近い候補のカロリーを自動入力します</p>}
-          {filtered.map((f,i)=>(
-            <button key={i} className="foodchip" onClick={()=>addFood(f.name, f.kcal)}>{f.name} <span style={{color:"var(--accent)"}}>{f.kcal}</span></button>
+          {matches.map((f,i)=>(
+            <button key={i} className="foodchip" onClick={()=>{ addFood(f.name, f.kcal); setQ(""); setCkcal(""); setKcalTouched(false); }}>{f.name} <span style={{color:"var(--accent)"}}>{f.kcal}</span></button>
           ))}
         </div>
       ) : (
@@ -1064,19 +1368,6 @@ function Food({data, onBack, onSave}){
             </div>
           ))}
         </div>
-      )}
-
-      {/* 自由入力(カロリー自動補完付き) */}
-      <p className="sub" style={{fontSize:12, fontWeight:800, margin:"16px 0 4px"}}>リストにないものを追加(品名を入れると目安カロリーを自動入力)</p>
-      <div className="row" style={{gap:6}}>
-        <input className="field" placeholder="品名" value={cname} onChange={e=>onCnameChange(e.target.value)} style={{marginTop:0, flex:2}}/>
-        <input className="field" type="number" inputMode="numeric" placeholder="kcal" value={ckcal}
-          onChange={e=>{ setCkcal(e.target.value); setKcalTouched(true); }} style={{marginTop:0, flex:1}}/>
-        <button onClick={()=>{ addFood(cname.trim(), Number(ckcal)); setCname(""); setCkcal(""); setKcalTouched(false); }}
-          style={{padding:"11px 16px", borderRadius:14, background:"var(--accent)", color:"#fff", fontWeight:800, fontSize:14, flexShrink:0}}>追加</button>
-      </div>
-      {suggestion && !kcalTouched && cname.trim() !== "" && (
-        <p className="sub" style={{fontSize:11, margin:"6px 0 0"}}>💡 「{suggestion.name}」の目安 {suggestion.kcal} kcal を自動入力しました(修正できます)</p>
       )}
 
       {/* この日のログ */}
