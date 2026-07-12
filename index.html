@@ -155,23 +155,10 @@ const EXERCISES = [
   { name:"その場ジョギング", tip:"肩の力を抜いて軽やかに弾む", emoji:"👟" },
 ];
 
-/* 体型維持用の固定筋トレメニュー(4種目×3周・ゆっくり動作) */
-const MAINTAIN_BASE = [
-  { name:"スクワット",     tip:"3秒かけてゆっくり下ろす。膝はつま先の向きに", emoji:"🦵" },
-  { name:"プッシュアップ", tip:"膝つきOK。胸を床に近づけてゆっくり",         emoji:"💪" },
-  { name:"プランク",       tip:"頭からかかとまで一直線をキープ",             emoji:"🧱" },
-  { name:"ヒップリフト",   tip:"お尻を締めて、頂点で2秒キープ",              emoji:"🌉" },
-];
-const ROUND_MARK = ["①","②","③"];
-const MAINTAIN_MENU = [0,1,2].flatMap(r =>
-  MAINTAIN_BASE.map(e => ({...e, name:`${e.name} ${ROUND_MARK[r]}`}))
-);
-
 const COURSES = [
   { id:"5", label:"サクッと5分", desc:"スキマ時間の定番", count:6, work:30, rest:15, minutes:5 },
   { id:"8", label:"しっかり8分", desc:"汗ばむ燃焼コース", count:10, work:30, rest:15, minutes:8 },
   { id:"10", label:"本気の10分", desc:"今日のごほうび前に", count:12, work:30, rest:15, minutes:10 },
-  { id:"kin", label:"維持の筋トレ12分", desc:"週2〜3回で筋肉キープ", count:12, work:40, rest:20, minutes:12, fixed:true, mets:5, chip:"4種目×3周" },
 ];
 
 const TITLES = ["かけだし","ビギナー","ルーキー","チャレンジャー","ファイター","バーナー","アスリート","エキスパート","マスター","チャンピオン","レジェンド"];
@@ -189,11 +176,11 @@ const stageOf = (level) => level >= 10 ? 5 : level >= 8 ? 4 : level >= 5 ? 3 : l
 const DEFAULT_DATA = {
   xp:0, streak:0, bestStreak:0, lastDate:null,
   totalWorkouts:0, totalMinutes:0, totalBurn:0, history:[],
-  weightKg:60, targetKcal:2000, meals:[],
+  weightKg:60, targetKcal:2000, meals:[], weights:[],
 };
 
-/* 推定消費カロリー(燃焼サーキット≒8METs、筋トレコース≒5METs) */
-const burnKcal = (minutes, weightKg, mets) => Math.round((mets||8) * (weightKg||60) * (minutes/60) * 1.05);
+/* サーキットトレーニング(高強度自重)≒ 8METs での推定消費カロリー */
+const burnKcal = (minutes, weightKg) => Math.round(8 * (weightKg||60) * (minutes/60) * 1.05);
 
 /* 食事タイプ */
 const MEAL_TYPES = ["朝食","昼食","夕食","間食"];
@@ -211,6 +198,15 @@ const FOODS = [
   {cat:"主食", name:"牛丼 並盛", kcal:650},
   {cat:"主食", name:"チャーハン", kcal:650},
   {cat:"主食", name:"菓子パン 1個", kcal:400},
+  {cat:"主食", name:"にぎり寿司 10貫", kcal:500},
+  {cat:"主食", name:"親子丼", kcal:650},
+  {cat:"主食", name:"カツ丼", kcal:900},
+  {cat:"主食", name:"オムライス", kcal:700},
+  {cat:"主食", name:"天ぷらそば", kcal:450},
+  {cat:"主食", name:"サンドイッチ 1個", kcal:300},
+  {cat:"主食", name:"ピザ 2切れ", kcal:400},
+  {cat:"主食", name:"ハンバーガー 1個", kcal:300},
+  {cat:"主食", name:"カップ麺 1個", kcal:400},
   {cat:"主菜", name:"唐揚げ 3個", kcal:250},
   {cat:"主菜", name:"焼き鮭 1切", kcal:130},
   {cat:"主菜", name:"生姜焼き", kcal:350},
@@ -221,7 +217,14 @@ const FOODS = [
   {cat:"主菜", name:"刺身 盛り合わせ", kcal:150},
   {cat:"主菜", name:"焼き鳥 3本", kcal:250},
   {cat:"主菜", name:"餃子 6個", kcal:350},
+  {cat:"主菜", name:"サラダチキン 1個", kcal:110},
+  {cat:"主菜", name:"ゆで卵 1個", kcal:76},
+  {cat:"主菜", name:"サバ缶 1缶", kcal:300},
+  {cat:"主菜", name:"コロッケ 1個", kcal:160},
+  {cat:"主菜", name:"エビフライ 2本", kcal:200},
+  {cat:"主菜", name:"ステーキ 150g", kcal:400},
   {cat:"副菜", name:"味噌汁", kcal:50},
+  {cat:"副菜", name:"豚汁", kcal:120},
   {cat:"副菜", name:"サラダ(ドレッシング込)", kcal:80},
   {cat:"副菜", name:"ポテトサラダ", kcal:170},
   {cat:"副菜", name:"きんぴらごぼう", kcal:80},
@@ -236,6 +239,10 @@ const FOODS = [
   {cat:"間食", name:"バナナ 1本", kcal:90},
   {cat:"間食", name:"ヨーグルト 1個", kcal:80},
   {cat:"間食", name:"ミックスナッツ ひとつかみ", kcal:180},
+  {cat:"間食", name:"ショートケーキ 1切", kcal:350},
+  {cat:"間食", name:"大福 1個", kcal:120},
+  {cat:"間食", name:"せんべい 2枚", kcal:80},
+  {cat:"間食", name:"プロテイン 1杯", kcal:120},
   {cat:"飲み物", name:"ビール 350ml", kcal:140},
   {cat:"飲み物", name:"ハイボール 1杯", kcal:70},
   {cat:"飲み物", name:"缶チューハイ 350ml", kcal:180},
@@ -243,6 +250,10 @@ const FOODS = [
   {cat:"飲み物", name:"カフェラテ 1杯", kcal:120},
   {cat:"飲み物", name:"オレンジジュース 1杯", kcal:90},
   {cat:"飲み物", name:"牛乳 コップ1杯", kcal:130},
+  {cat:"飲み物", name:"ワイン グラス1杯", kcal:90},
+  {cat:"飲み物", name:"日本酒 1合", kcal:200},
+  {cat:"飲み物", name:"コーヒー(無糖)", kcal:5},
+  {cat:"飲み物", name:"緑茶・お茶", kcal:0},
 ];
 const FOOD_CATS = ["主食","主菜","副菜","間食","飲み物"];
 
@@ -436,7 +447,7 @@ function App(){
     const xp = data.xp + gained;
     const newLv = levelFromXp(xp).level;
     const evolved = stageOf(newLv) > stageOf(prevLv);
-    const kcal = burnKcal(c.minutes, data.weightKg, c.mets);
+    const kcal = burnKcal(c.minutes, data.weightKg);
 
     const d = {
       ...data, xp, streak,
@@ -464,7 +475,7 @@ function App(){
         onStart={()=>setScreen("workout")} onStats={()=>setScreen("stats")} onFood={()=>setScreen("food")}
         saveSettings={(patch)=>saveData({...data, ...patch})} />}
       {screen==="food" && <Food data={data} onBack={()=>setScreen("home")} onSave={saveData} />}
-      {screen==="workout" && <Workout course={course} menu={course.fixed ? MAINTAIN_MENU : todayMenu.slice(0,course.count)} level={levelFromXp(data.xp).level}
+      {screen==="workout" && <Workout course={course} menu={todayMenu.slice(0,course.count)} level={levelFromXp(data.xp).level}
         onFinish={()=>finishWorkout(course)} onQuit={()=>setScreen("home")} />}
       {screen==="done" && <Done result={result} data={data} onHome={()=>setScreen("home")} />}
       {screen==="stats" && <Stats data={data} onBack={()=>setScreen("home")} />}
@@ -477,6 +488,7 @@ function Home({data, course, setCourse, todayMenu, onStart, onStats, onFood, sav
   const [showSet, setShowSet] = useState(false);
   const [w, setW] = useState(String(data.weightKg||60));
   const [t, setT] = useState(String(data.targetKcal||2000));
+  const [wIn, setWIn] = useState("");
   const lv = levelFromXp(data.xp);
   const stage = stageOf(lv.level);
   const stageInfo = STAGES[stage-1];
@@ -574,7 +586,7 @@ function Home({data, course, setCourse, todayMenu, onStart, onStats, onFood, sav
           <button onClick={onFood} className="card" style={{padding:16, marginTop:12, textAlign:"left", width:"100%", display:"block"}}>
             <div className="row" style={{justifyContent:"space-between"}}>
               <span className="sub" style={{fontSize:12, fontWeight:800}}>🍽 今日のカロリー</span>
-              <span style={{fontSize:12, fontWeight:800, color:"var(--accent)"}}>記録する ›</span>
+              <span style={{fontSize:12, fontWeight:800, color:"var(--accent)"}}>記録・編集 ›</span>
             </div>
             <div className="row" style={{gap:4, alignItems:"baseline", marginTop:4}}>
               <span className="bebas" style={{fontSize:28, lineHeight:1}}>{intake}</span>
@@ -591,6 +603,37 @@ function Home({data, course, setCourse, todayMenu, onStart, onStats, onFood, sav
         );
       })()}
 
+      {/* 今日の体重 */}
+      {(()=>{
+        const today = todayStr();
+        const ws = [...(data.weights||[])].sort((a,b)=>a.date<b.date?-1:1);
+        const todayW = ws.find(x=>x.date===today);
+        const prev = [...ws].reverse().find(x=>x.date<today);
+        const diff = todayW && prev ? Math.round((todayW.kg-prev.kg)*10)/10 : null;
+        return (
+          <div className="card" style={{padding:16, marginTop:12}}>
+            <div className="row" style={{justifyContent:"space-between"}}>
+              <span className="sub" style={{fontSize:12, fontWeight:800}}>⚖️ 今日の体重</span>
+              {todayW && <span style={{fontSize:12, fontWeight:800, color:"var(--teal)"}}>✓ 記録済み {todayW.kg}kg{diff!==null && ` (前回比 ${diff>0?"+":""}${diff}kg)`}</span>}
+            </div>
+            <div className="row" style={{gap:8, marginTop:8}}>
+              <input className="field" type="number" inputMode="decimal" step="0.1"
+                placeholder={prev?`前回 ${prev.kg} kg`:(todayW?String(todayW.kg):"例: 65.5")}
+                value={wIn} onChange={e=>setWIn(e.target.value)} style={{marginTop:0, flex:1}}/>
+              <button onClick={()=>{
+                const kg = Math.round((Number(wIn)||0)*10)/10;
+                if(kg<25||kg>200) return;
+                const rest = (data.weights||[]).filter(x=>x.date!==today);
+                saveSettings({weights:[...rest, {date:today, kg}].slice(-365), weightKg:kg});
+                setWIn("");
+              }} style={{padding:"11px 18px", borderRadius:14, background:"var(--ink)", color:"#fff", fontWeight:800, fontSize:14, flexShrink:0}}>
+                {todayW?"更新":"記録"}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* コース */}
       <p className="sub" style={{fontSize:13, fontWeight:800, margin:"18px 0 8px"}}>コースを選ぶ</p>
       <div style={{display:"flex", flexDirection:"column", gap:8}}>
@@ -602,16 +645,14 @@ function Home({data, course, setCourse, todayMenu, onStart, onStats, onFood, sav
                 <span style={{fontWeight:800}}>{c.label}</span>
                 <span style={{fontSize:12, marginLeft:8, color:on?"rgba(255,255,255,.7)":"var(--sub)"}}>{c.desc}</span>
               </div>
-              <span className="chip" style={{background:on?"rgba(255,255,255,.15)":"var(--accent-soft)", color:on?"#fff":"var(--accent)"}}>{c.chip || `${c.count}種目`}</span>
+              <span className="chip" style={{background:on?"rgba(255,255,255,.15)":"var(--accent-soft)", color:on?"#fff":"var(--accent)"}}>{c.count}種目</span>
             </button>
           );
         })}
       </div>
 
       <p className="sub" style={{fontSize:11, lineHeight:1.7, margin:"10px 0 0"}}>
-        {course.fixed
-          ? <>今日のメニュー: {MAINTAIN_BASE.map(e=>e.name).join("・")} を3周(固定メニュー・回数よりゆっくり丁寧に)</>
-          : <>今日のメニュー: {todayMenu.slice(0,course.count).map(e=>e.name).join("・")}(毎日入れ替わります)</>}
+        今日のメニュー: {todayMenu.slice(0,course.count).map(e=>e.name).join("・")}(毎日入れ替わります)
       </p>
 
       <div style={{flex:1}}/>
@@ -619,7 +660,7 @@ function Home({data, course, setCourse, todayMenu, onStart, onStats, onFood, sav
         ▶ {doneToday ? "もう1本いく" : "ワークアウト開始"}
       </button>
       <p className="sub" style={{fontSize:11, textAlign:"center", margin:"8px 0 0"}}>
-        {course.work}秒動く → {course.rest}秒休む を繰り返すだけ。無理せず自分のペースで。
+        30秒動く → 15秒休む を繰り返すだけ。無理せず自分のペースで。
       </p>
 
       {/* 設定モーダル */}
@@ -837,46 +878,108 @@ function Done({result, data, onHome}){
   );
 }
 
-/* ---------- 食事記録 ---------- */
+/* ---------- デイリー記録(食事・体重・アクティビティの閲覧&編集) ---------- */
 function Food({data, onBack, onSave}){
+  const [viewDate, setViewDate] = useState(todayStr());
   const [mealType, setMealType] = useState(guessMeal());
   const [q, setQ] = useState("");
   const [cname, setCname] = useState("");
   const [ckcal, setCkcal] = useState("");
+  const [kcalTouched, setKcalTouched] = useState(false);
   const [added, setAdded] = useState("");
+  const [wIn, setWIn] = useState("");
 
   const today = todayStr();
-  const meals = data.meals||[];
-  const todayMeals = meals.filter(m=>m.date===today);
-  const intake = todayMeals.reduce((a,m)=>a+m.kcal,0);
-  const burn = data.history.filter(h=>h.date===today).reduce((a,h)=>a+(h.kcal||0),0);
-  const target = data.targetKcal||2000;
+  const isToday = viewDate === today;
+  const dObj = new Date(viewDate + "T00:00:00");
+  const dateLabel = isToday ? "今日" : `${dObj.getMonth()+1}/${dObj.getDate()}(${"日月火水木金土"[dObj.getDay()]})`;
+
+  const shiftDate = (n) => {
+    const d = new Date(viewDate + "T00:00:00");
+    d.setDate(d.getDate() + n);
+    const ds = dateStrOf(d);
+    if (ds > today) return;
+    setViewDate(ds);
+  };
+
+  const meals = data.meals || [];
+  const dayMeals = meals.filter(m => m.date === viewDate);
+  const dayWorkouts = data.history.filter(h => h.date === viewDate);
+  const intake = dayMeals.reduce((a,m) => a + m.kcal, 0);
+  const burn = dayWorkouts.reduce((a,h) => a + (h.kcal||0), 0);
+  const target = data.targetKcal || 2000;
   const remain = target + burn - intake;
-  const frac = Math.min(1, intake/((target+burn)||1));
+  const frac = Math.min(1, intake / ((target+burn)||1));
 
-  const cutoff = (()=>{ const d=new Date(); d.setDate(d.getDate()-60); return dateStrOf(d); })();
+  const dayWeight = (data.weights||[]).find(x => x.date === viewDate);
 
+  /* 食品追加(選択中の日付に記録) */
   const addFood = (name, kcal) => {
-    if(!name || !(kcal>0)) return;
-    const entry = {id: Date.now()+"-"+Math.floor(Math.random()*1e6), date:today, meal:mealType, name, kcal:Math.round(kcal)};
-    onSave({...data, meals:[...meals.filter(m=>m.date>=cutoff), entry]});
+    if(!name || !(kcal >= 0)) return;
+    const entry = {id: Date.now()+"-"+Math.floor(Math.random()*1e6), date:viewDate, meal:mealType, name, kcal:Math.round(kcal)};
+    onSave({...data, meals:[...meals, entry].slice(-1500)});
     setAdded(name); setTimeout(()=>setAdded(""), 1200);
   };
-  const removeFood = (id) => onSave({...data, meals: meals.filter(m=>m.id!==id)});
+  const removeFood = (id) => onSave({...data, meals: meals.filter(m => m.id !== id)});
 
-  const filtered = q ? FOODS.filter(f=>f.name.includes(q)) : null;
+  /* ワークアウト削除(合計から差し引き。XP・連続記録は保持) */
+  const removeWorkout = (h) => {
+    const i = data.history.indexOf(h);
+    if(i < 0) return;
+    const history = [...data.history]; history.splice(i,1);
+    onSave({
+      ...data, history,
+      totalWorkouts: Math.max(0, data.totalWorkouts-1),
+      totalMinutes: Math.max(0, data.totalMinutes - h.minutes),
+      totalBurn: Math.max(0, (data.totalBurn||0) - (h.kcal||0)),
+    });
+  };
+
+  /* 体重記録(選択中の日付) */
+  const saveWeight = () => {
+    const kg = Math.round((Number(wIn)||0)*10)/10;
+    if(kg < 25 || kg > 200) return;
+    const rest = (data.weights||[]).filter(x => x.date !== viewDate);
+    const patch = {weights:[...rest, {date:viewDate, kg}].sort((a,b)=>a.date<b.date?-1:1).slice(-365)};
+    if(isToday) patch.weightKg = kg;
+    onSave({...data, ...patch});
+    setWIn("");
+  };
+
+  /* 品名入力でカロリー自動補完 */
+  const suggestion = cname.trim().length >= 1
+    ? FOODS.find(f => f.name.includes(cname.trim()) || cname.trim().includes(f.name.split(" ")[0]))
+    : null;
+  const onCnameChange = (v) => {
+    setCname(v);
+    if(!kcalTouched){
+      const s = v.trim().length >= 1 ? FOODS.find(f => f.name.includes(v.trim())) : null;
+      setCkcal(s ? String(s.kcal) : "");
+    }
+    if(v === "") { setKcalTouched(false); setCkcal(""); }
+  };
+
+  const filtered = q ? FOODS.filter(f => f.name.includes(q)) : null;
 
   return (
     <div className="anim-rise" style={{display:"flex", flexDirection:"column", flex:1}}>
       <div className="row" style={{gap:10}}>
         <button onClick={onBack} className="card" aria-label="戻る" style={{padding:"8px 12px", borderRadius:14, fontSize:15}}>◀</button>
-        <h1 style={{fontSize:23, fontWeight:800, margin:0}}>食事記録</h1>
+        <h1 style={{fontSize:23, fontWeight:800, margin:0}}>デイリー記録</h1>
       </div>
 
-      {/* 今日の収支 */}
-      <div style={{background:"var(--ink)", color:"#fff", borderRadius:24, padding:"16px 20px", marginTop:14}}>
+      {/* 日付ナビ */}
+      <div className="row" style={{justifyContent:"space-between", marginTop:12}}>
+        <button onClick={()=>shiftDate(-1)} className="card" style={{padding:"8px 16px", borderRadius:999, fontSize:14, fontWeight:800}}>‹ 前日</button>
+        <span style={{fontSize:17, fontWeight:800}}>{dateLabel}</span>
+        <button onClick={()=>shiftDate(1)} disabled={isToday} className="card"
+          style={{padding:"8px 16px", borderRadius:999, fontSize:14, fontWeight:800, opacity:isToday?0.35:1}}>翌日 ›</button>
+      </div>
+
+      {/* 収支サマリー */}
+      <div style={{background:"var(--ink)", color:"#fff", borderRadius:24, padding:"16px 20px", marginTop:12}}>
         <div className="row" style={{justifyContent:"space-between", alignItems:"baseline"}}>
-          <span style={{fontSize:12, fontWeight:800, color:"rgba(255,255,255,.65)"}}>今日の摂取</span>
+          <span style={{fontSize:12, fontWeight:800, color:"rgba(255,255,255,.65)"}}>{dateLabel}の摂取</span>
           <span style={{fontSize:12, fontWeight:800, color:"rgba(255,255,255,.65)"}}>目標 {target}{burn>0?` + 運動 ${burn}`:""} kcal</span>
         </div>
         <div className="row" style={{gap:5, alignItems:"baseline", marginTop:2}}>
@@ -887,12 +990,50 @@ function Food({data, onBack, onSave}){
           <div style={{height:"100%", width:`${frac*100}%`, background:remain<0?"#FF6B5E":"var(--gold)", borderRadius:999, transition:"width .5s"}}/>
         </div>
         <p style={{fontSize:12, fontWeight:800, margin:"8px 0 0", color:remain<0?"#FFB4AC":"rgba(255,255,255,.8)"}}>
-          {remain>=0 ? `あと ${remain} kcal 食べられます` : `${-remain} kcal オーバー`}
+          {remain>=0 ? (isToday ? `あと ${remain} kcal 食べられます` : `${remain} kcal 余裕がありました`) : `${-remain} kcal オーバー`}
         </p>
       </div>
 
+      {/* この日の体重 */}
+      <div className="card" style={{padding:"12px 16px", marginTop:10}}>
+        <div className="row" style={{justifyContent:"space-between"}}>
+          <span className="sub" style={{fontSize:12, fontWeight:800}}>⚖️ {dateLabel}の体重</span>
+          {dayWeight && <span style={{fontSize:12, fontWeight:800, color:"var(--teal)"}}>✓ {dayWeight.kg} kg</span>}
+        </div>
+        <div className="row" style={{gap:8, marginTop:8}}>
+          <input className="field" type="number" inputMode="decimal" step="0.1"
+            placeholder={dayWeight ? `${dayWeight.kg} kg(修正できます)` : "例: 65.5"}
+            value={wIn} onChange={e=>setWIn(e.target.value)} style={{marginTop:0, flex:1}}/>
+          <button onClick={saveWeight} style={{padding:"11px 18px", borderRadius:14, background:"var(--ink)", color:"#fff", fontWeight:800, fontSize:14, flexShrink:0}}>
+            {dayWeight ? "修正" : "記録"}
+          </button>
+        </div>
+      </div>
+
+      {/* この日のアクティビティ */}
+      <p className="sub" style={{fontSize:12, fontWeight:800, margin:"16px 0 6px"}}>🔥 {dateLabel}のアクティビティ</p>
+      {dayWorkouts.length === 0 ? (
+        <div className="card" style={{padding:"12px 16px"}}>
+          <p className="sub" style={{fontSize:12, margin:0}}>ワークアウトの記録はありません</p>
+        </div>
+      ) : (
+        <div style={{display:"flex", flexDirection:"column", gap:6}}>
+          {dayWorkouts.map((h,i)=>(
+            <div key={i} className="card row" style={{padding:"11px 16px", borderRadius:18, justifyContent:"space-between"}}>
+              <div>
+                <p style={{fontSize:14, fontWeight:800, margin:0}}>{h.course}</p>
+                <p className="sub" style={{fontSize:11, margin:0}}>{h.minutes}分 ・ 約{h.kcal||0} kcal ・ +{h.xp} XP</p>
+              </div>
+              <button onClick={()=>{ if(window.confirm("この記録を削除しますか?(XPと連続記録は保持されます)")) removeWorkout(h); }}
+                aria-label="削除" className="sub" style={{fontSize:14, padding:"4px 8px"}}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* 食事タイプ */}
-      <div className="row" style={{gap:6, marginTop:14}}>
+      <p className="sub" style={{fontSize:12, fontWeight:800, margin:"16px 0 6px"}}>🍽 {dateLabel}の食事を追加</p>
+      <div className="row" style={{gap:6}}>
         {MEAL_TYPES.map(m=>(
           <button key={m} onClick={()=>setMealType(m)} className={"mealtab"+(mealType===m?" on":"")}>{m}</button>
         ))}
@@ -900,12 +1041,12 @@ function Food({data, onBack, onSave}){
 
       {/* 検索 */}
       <input className="field" placeholder="食べたものを検索(例:ごはん、ビール)" value={q} onChange={e=>setQ(e.target.value)} style={{marginTop:10}}/>
-      {added && <p className="anim-pop" style={{fontSize:12, fontWeight:800, color:"var(--teal)", margin:"8px 0 0", textAlign:"center"}}>✓ 「{added}」を{mealType}に追加しました</p>}
+      {added && <p className="anim-pop" style={{fontSize:12, fontWeight:800, color:"var(--teal)", margin:"8px 0 0", textAlign:"center"}}>✓ 「{added}」を{dateLabel}の{mealType}に追加しました</p>}
 
       {/* 食品リスト */}
       {filtered ? (
         <div className="row" style={{flexWrap:"wrap", gap:6, marginTop:10}}>
-          {filtered.length===0 && <p className="sub" style={{fontSize:12}}>見つかりません。下の欄から自由入力で追加できます</p>}
+          {filtered.length===0 && <p className="sub" style={{fontSize:12}}>見つかりません。下の欄に品名を入力すると近い候補のカロリーを自動入力します</p>}
           {filtered.map((f,i)=>(
             <button key={i} className="foodchip" onClick={()=>addFood(f.name, f.kcal)}>{f.name} <span style={{color:"var(--accent)"}}>{f.kcal}</span></button>
           ))}
@@ -925,22 +1066,26 @@ function Food({data, onBack, onSave}){
         </div>
       )}
 
-      {/* 自由入力 */}
-      <p className="sub" style={{fontSize:12, fontWeight:800, margin:"16px 0 4px"}}>リストにないものを追加</p>
+      {/* 自由入力(カロリー自動補完付き) */}
+      <p className="sub" style={{fontSize:12, fontWeight:800, margin:"16px 0 4px"}}>リストにないものを追加(品名を入れると目安カロリーを自動入力)</p>
       <div className="row" style={{gap:6}}>
-        <input className="field" placeholder="品名" value={cname} onChange={e=>setCname(e.target.value)} style={{marginTop:0, flex:2}}/>
-        <input className="field" type="number" inputMode="numeric" placeholder="kcal" value={ckcal} onChange={e=>setCkcal(e.target.value)} style={{marginTop:0, flex:1}}/>
-        <button onClick={()=>{ addFood(cname.trim(), Number(ckcal)); setCname(""); setCkcal(""); }}
+        <input className="field" placeholder="品名" value={cname} onChange={e=>onCnameChange(e.target.value)} style={{marginTop:0, flex:2}}/>
+        <input className="field" type="number" inputMode="numeric" placeholder="kcal" value={ckcal}
+          onChange={e=>{ setCkcal(e.target.value); setKcalTouched(true); }} style={{marginTop:0, flex:1}}/>
+        <button onClick={()=>{ addFood(cname.trim(), Number(ckcal)); setCname(""); setCkcal(""); setKcalTouched(false); }}
           style={{padding:"11px 16px", borderRadius:14, background:"var(--accent)", color:"#fff", fontWeight:800, fontSize:14, flexShrink:0}}>追加</button>
       </div>
+      {suggestion && !kcalTouched && cname.trim() !== "" && (
+        <p className="sub" style={{fontSize:11, margin:"6px 0 0"}}>💡 「{suggestion.name}」の目安 {suggestion.kcal} kcal を自動入力しました(修正できます)</p>
+      )}
 
-      {/* 今日のログ */}
-      {todayMeals.length>0 && (
+      {/* この日のログ */}
+      {dayMeals.length>0 && (
         <>
-          <p className="sub" style={{fontSize:12, fontWeight:800, margin:"18px 0 6px"}}>今日食べたもの</p>
+          <p className="sub" style={{fontSize:12, fontWeight:800, margin:"18px 0 6px"}}>{dateLabel}食べたもの</p>
           <div style={{display:"flex", flexDirection:"column", gap:6, paddingBottom:8}}>
             {MEAL_TYPES.map(mt=>{
-              const items = todayMeals.filter(m=>m.meal===mt);
+              const items = dayMeals.filter(m=>m.meal===mt);
               if(items.length===0) return null;
               return (
                 <div key={mt} className="card" style={{padding:"10px 14px", borderRadius:18}}>
@@ -964,6 +1109,50 @@ function Food({data, onBack, onSave}){
       <p className="sub" style={{fontSize:10, lineHeight:1.6, margin:"14px 0 4px"}}>
         ※ カロリーは一般的な目安による推定値です。正確な管理が必要な場合は栄養成分表示をご確認ください。
       </p>
+    </div>
+  );
+}
+
+/* ---------- 体重推移グラフ ---------- */
+function WeightChart({weights}){
+  const ws = [...(weights||[])].sort((a,b)=>a.date<b.date?-1:1).slice(-30);
+  if(ws.length === 0) return <p className="sub" style={{fontSize:12, margin:0}}>まだ体重の記録がありません。ホーム画面から今日の体重を記録してみましょう</p>;
+  if(ws.length === 1) return <p className="sub" style={{fontSize:12, margin:0}}>現在 <b style={{color:"var(--ink)"}}>{ws[0].kg} kg</b>。2日分たまるとグラフが表示されます</p>;
+
+  const W=320, H=130, padL=34, padR=14, padT=16, padB=22;
+  const kgs = ws.map(w=>w.kg);
+  const rawMin = Math.min(...kgs), rawMax = Math.max(...kgs);
+  const span = Math.max(1, rawMax-rawMin);
+  const min = rawMin - span*0.15, max = rawMax + span*0.15;
+  const x = (i) => padL + (i/(ws.length-1)) * (W-padL-padR);
+  const y = (kg) => padT + (1-(kg-min)/(max-min)) * (H-padT-padB);
+  const pts = ws.map((w,i)=>`${x(i)},${y(w.kg)}`).join(" ");
+  const first = ws[0], last = ws[ws.length-1];
+  const diff = Math.round((last.kg-first.kg)*10)/10;
+  const lbl = (d)=>{ const t=new Date(d+"T00:00:00"); return `${t.getMonth()+1}/${t.getDate()}`; };
+
+  return (
+    <div>
+      <div className="row" style={{justifyContent:"space-between", marginBottom:6}}>
+        <span style={{fontSize:14, fontWeight:800}}>現在 {last.kg} kg</span>
+        <span style={{fontSize:12, fontWeight:800, color:diff<0?"var(--teal)":diff>0?"var(--accent)":"var(--sub)"}}>
+          {lbl(first.date)}から {diff>0?"+":""}{diff} kg
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%", height:"auto", display:"block"}}>
+        {[rawMax, rawMin].map((v,i)=>(
+          <g key={i}>
+            <line x1={padL} x2={W-padR} y1={y(v)} y2={y(v)} stroke="var(--line)" strokeDasharray="3 4" strokeWidth="1"/>
+            <text x={padL-5} y={y(v)+3.5} fontSize="9" fontWeight="700" fill="#6B7A73" textAnchor="end">{v}</text>
+          </g>
+        ))}
+        <polyline points={pts} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
+        {ws.map((w,i)=>(
+          <circle key={i} cx={x(i)} cy={y(w.kg)} r={i===ws.length-1?4:2.5} fill={i===ws.length-1?"var(--accent)":"#fff"} stroke="var(--accent)" strokeWidth="2"/>
+        ))}
+        <text x={x(0)} y={H-6} fontSize="9" fontWeight="700" fill="#6B7A73" textAnchor="start">{lbl(first.date)}</text>
+        <text x={x(ws.length-1)} y={H-6} fontSize="9" fontWeight="700" fill="#6B7A73" textAnchor="end">{lbl(last.date)}</text>
+      </svg>
     </div>
   );
 }
@@ -992,6 +1181,12 @@ function Stats({data, onBack}){
         <p style={{fontSize:12, fontWeight:800, color:"rgba(255,255,255,.6)", margin:0}}>現在のランク</p>
         <p style={{fontSize:26, fontWeight:800, margin:"4px 0 0"}}>Lv.{lv.level} {title}</p>
         <p style={{fontSize:12, color:"rgba(255,255,255,.6)", margin:"2px 0 0"}}>累計 {data.xp} XP</p>
+      </div>
+
+      {/* 体重推移 */}
+      <p className="sub" style={{fontSize:13, fontWeight:800, margin:"18px 0 8px"}}>体重の推移(直近30回)</p>
+      <div className="card" style={{padding:16}}>
+        <WeightChart weights={data.weights}/>
       </div>
 
       {/* メラの成長 */}
