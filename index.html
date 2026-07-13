@@ -160,7 +160,20 @@ const COURSES = [
   { id:"5", label:"サクッと5分", desc:"スキマ時間の定番", count:6, work:30, rest:15, minutes:5 },
   { id:"8", label:"しっかり8分", desc:"汗ばむ燃焼コース", count:10, work:30, rest:15, minutes:8 },
   { id:"10", label:"本気の10分", desc:"今日のごほうび前に", count:12, work:30, rest:15, minutes:10 },
+  { id:"kin", label:"維持の筋トレ12分", desc:"週2〜3回で筋肉キープ", count:12, work:40, rest:20, minutes:12, fixed:true, mets:5, chip:"4種目×3周" },
 ];
+
+/* 維持の筋トレ:固定4種目×3周(スローテンポ重視) */
+const MAINTAIN_BASE = [
+  { name:"スクワット",   tip:"3秒かけてゆっくり下ろす。お尻を後ろへ", emoji:"🦵" },
+  { name:"プッシュアップ", tip:"胸を3秒で床へ。きつければ膝つきでOK", emoji:"💪" },
+  { name:"プランク",     tip:"頭からかかとまで一直線を40秒キープ", emoji:"🧱" },
+  { name:"ヒップリフト", tip:"頂点でお尻をキュッと2秒キープ", emoji:"🌉" },
+];
+const ROUND_MARK = ["①","②","③"];
+const MAINTAIN_MENU = [0,1,2].flatMap(r =>
+  MAINTAIN_BASE.map(e => ({ ...e, name:`${e.name} ${ROUND_MARK[r]}`, base:e.name }))
+);
 
 const TITLES = ["かけだし","ビギナー","ルーキー","チャレンジャー","ファイター","バーナー","アスリート","エキスパート","マスター","チャンピオン","レジェンド"];
 
@@ -180,8 +193,8 @@ const DEFAULT_DATA = {
   weightKg:60, targetKcal:2000, meals:[], weights:[],
 };
 
-/* サーキットトレーニング(高強度自重)≒ 8METs での推定消費カロリー */
-const burnKcal = (minutes, weightKg) => Math.round(8 * (weightKg||60) * (minutes/60) * 1.05);
+/* 推定消費カロリー(燃焼サーキット≒8METs、筋トレコース≒5METs) */
+const burnKcal = (minutes, weightKg, mets) => Math.round((mets||8) * (weightKg||60) * (minutes/60) * 1.05);
 
 /* 食事タイプ */
 const MEAL_TYPES = ["朝食","昼食","夕食","間食"];
@@ -409,7 +422,7 @@ function Mela({stage=1, mood="happy", size=150, cheering=false}){
    ・ソフトシャドウ・ゆっくり旋回するカメラ
    ============================================================ */
 const CAM_PRESET = {
-  "マウンテンクライマー":"midside", "プランク":"midside", "膝つき腕立て":"midside",
+  "マウンテンクライマー":"midside", "プランク":"midside", "膝つき腕立て":"midside", "プッシュアップ":"midside",
   "バイシクルクランチ":"lowside", "ヒップリフト":"lowside",
 };
 const CAMS = {
@@ -620,6 +633,19 @@ const POSES = {
     f.shL.rotation.x=L?swing:-swing; f.shR.rotation.x=L?-swing:swing;
     f.elL.rotation.x=f.elR.rotation.x=-0.9*m-0.12;
   },
+  "プッシュアップ": (f,t)=>{
+    const c=easeInOut((1-Math.cos(t*2.6))/2);
+    /* つま先立ちのフルプッシュアップ:体を一直線に保ち胸を床へ */
+    f.root.position.y=0.6-0.15*c;
+    f.root.rotation.x=1.1+0.12*c;
+    f.spine.rotation.x=0.05; f.neck.rotation.x=-0.55;
+    f.hipL.rotation.x=f.hipR.rotation.x=0.13;
+    f.kneeL.rotation.x=f.kneeR.rotation.x=0.05;
+    f.ankL.rotation.x=f.ankR.rotation.x=-0.6;
+    f.shL.rotation.x=f.shR.rotation.x=-0.9-0.14*c;
+    f.shL.rotation.z=-0.14-0.32*c; f.shR.rotation.z=0.14+0.32*c;
+    f.elL.rotation.x=f.elR.rotation.x=-(0.1+1.2*c);
+  },
   "膝つき腕立て": (f,t)=>{
     const c=easeInOut((1-Math.cos(t*2.8))/2);
     /* 膝から頭まで一直線を保ったまま胸を床へ */
@@ -689,7 +715,9 @@ const POSES = {
 /* 3Dデモモーダル */
 function ExerciseDemo({name, onClose}){
   const ref = useRef(null);
-  const ex = EXERCISES.find(e => e.name === name);
+  /* 「スクワット ①」→「スクワット」のように周回マークを除いて種目を特定 */
+  const baseName = name.replace(/\s*[①②③]\s*$/,"").trim();
+  const ex = EXERCISES.find(e => e.name === baseName) || MAINTAIN_BASE.find(e => e.name === baseName);
 
   useEffect(()=>{
     const THREE = window.THREE;
@@ -700,7 +728,7 @@ function ExerciseDemo({name, onClose}){
     scene.background = new THREE.Color(0xF3F5EF);
     scene.fog = new THREE.Fog(0xF3F5EF, 6, 12);
 
-    const cam = CAMS[CAM_PRESET[name] || "front"];
+    const cam = CAMS[CAM_PRESET[baseName] || "front"];
     const camera = new THREE.PerspectiveCamera(40, W/H, 0.1, 50);
     const camRig = new THREE.Group();
     camera.position.set(cam.pos[0], cam.pos[1], cam.pos[2]);
@@ -740,7 +768,7 @@ function ExerciseDemo({name, onClose}){
 
     const fig = buildFigure(THREE);
     scene.add(fig.root);
-    const pose = POSES[name] || POSES["その場ジョギング"];
+    const pose = POSES[baseName] || POSES["その場ジョギング"];
 
     let raf; const t0 = performance.now();
     const loop = () => {
@@ -821,7 +849,7 @@ function App(){
     const xp = data.xp + gained;
     const newLv = levelFromXp(xp).level;
     const evolved = stageOf(newLv) > stageOf(prevLv);
-    const kcal = burnKcal(c.minutes, data.weightKg);
+    const kcal = burnKcal(c.minutes, data.weightKg, c.mets);
 
     const d = {
       ...data, xp, streak,
@@ -849,7 +877,7 @@ function App(){
         onStart={()=>setScreen("workout")} onStats={()=>setScreen("stats")} onFood={()=>setScreen("food")}
         saveSettings={(patch)=>saveData({...data, ...patch})} />}
       {screen==="food" && <Food data={data} onBack={()=>setScreen("home")} onSave={saveData} />}
-      {screen==="workout" && <Workout course={course} menu={todayMenu.slice(0,course.count)} level={levelFromXp(data.xp).level}
+      {screen==="workout" && <Workout course={course} menu={course.fixed ? MAINTAIN_MENU : todayMenu.slice(0,course.count)} level={levelFromXp(data.xp).level}
         onFinish={()=>finishWorkout(course)} onQuit={()=>setScreen("home")} />}
       {screen==="done" && <Done result={result} data={data} onHome={()=>setScreen("home")} />}
       {screen==="stats" && <Stats data={data} onBack={()=>setScreen("home")} />}
@@ -1020,15 +1048,19 @@ function Home({data, course, setCourse, todayMenu, onStart, onStats, onFood, sav
                 <span style={{fontWeight:800}}>{c.label}</span>
                 <span style={{fontSize:12, marginLeft:8, color:on?"rgba(255,255,255,.7)":"var(--sub)"}}>{c.desc}</span>
               </div>
-              <span className="chip" style={{background:on?"rgba(255,255,255,.15)":"var(--accent-soft)", color:on?"#fff":"var(--accent)"}}>{c.count}種目</span>
+              <span className="chip" style={{background:on?"rgba(255,255,255,.15)":"var(--accent-soft)", color:on?"#fff":"var(--accent)"}}>{c.chip || `${c.count}種目`}</span>
             </button>
           );
         })}
       </div>
 
-      <p className="sub" style={{fontSize:11, margin:"12px 0 6px"}}>今日のメニュー(タップで動きを3Dプレビュー・毎日入れ替わります)</p>
+      <p className="sub" style={{fontSize:11, margin:"12px 0 6px"}}>
+        {course.fixed
+          ? "メニュー(固定・3周します)— タップで動きを3Dプレビュー"
+          : "今日のメニュー(タップで動きを3Dプレビュー・毎日入れ替わります)"}
+      </p>
       <div className="row" style={{flexWrap:"wrap", gap:6}}>
-        {todayMenu.slice(0,course.count).map((e,i)=>(
+        {(course.fixed ? MAINTAIN_BASE : todayMenu.slice(0,course.count)).map((e,i)=>(
           <button key={i} className="foodchip" onClick={()=>setDemo(e.name)}>{e.emoji} {e.name}</button>
         ))}
       </div>
@@ -1039,7 +1071,7 @@ function Home({data, course, setCourse, todayMenu, onStart, onStats, onFood, sav
         ▶ {doneToday ? "もう1本いく" : "ワークアウト開始"}
       </button>
       <p className="sub" style={{fontSize:11, textAlign:"center", margin:"8px 0 0"}}>
-        30秒動く → 15秒休む を繰り返すだけ。無理せず自分のペースで。
+        {course.work}秒動く → {course.rest}秒休む を繰り返すだけ。無理せず自分のペースで。
       </p>
 
       {/* 設定モーダル */}
