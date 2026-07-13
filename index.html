@@ -126,6 +126,7 @@ const {useState, useEffect, useRef, useMemo} = React;
    ============================================================ */
 
 const STORAGE_KEY = "pocket-trainer-v1";
+const APP_VERSION = "v2.6";
 
 /* ---------- 保存(Claude内は window.storage、iPhoneでは localStorage) ---------- */
 const store = {
@@ -190,11 +191,22 @@ const stageOf = (level) => level >= 10 ? 5 : level >= 8 ? 4 : level >= 5 ? 3 : l
 const DEFAULT_DATA = {
   xp:0, streak:0, bestStreak:0, lastDate:null,
   totalWorkouts:0, totalMinutes:0, totalBurn:0, history:[],
-  weightKg:60, targetKcal:2000, meals:[], weights:[],
+  weightKg:60, targetKcal:2000, meals:[], weights:[], moves:[],
 };
 
 /* 推定消費カロリー(燃焼サーキット≒8METs、筋トレコース≒5METs) */
 const burnKcal = (minutes, weightKg, mets) => Math.round((mets||8) * (weightKg||60) * (minutes/60) * 1.05);
+
+/* 日常活動の推定消費カロリー
+   歩行: 約3METs・1歩 ≒ 体重(kg)×0.0004 kcal(60kgで1万歩≒240kcal)
+   自転車: 通勤ペース約15km/h・5METs ≒ 体重(kg)×距離(km)×0.35 kcal */
+const moveKcal = (m, weightKg) => {
+  const w = weightKg || 60;
+  if(!m) return {steps:0, bike:0, total:0};
+  const steps = Math.round((m.steps||0) * w * 0.0004);
+  const bike  = Math.round((m.bikeKm||0) * w * 0.35);
+  return {steps, bike, total: steps + bike};
+};
 
 /* 食事タイプ */
 const MEAL_TYPES = ["朝食","昼食","夕食","間食"];
@@ -981,7 +993,8 @@ function Home({data, course, setCourse, todayMenu, onStart, onStats, onFood, sav
       {(()=>{
         const today = todayStr();
         const intake = (data.meals||[]).filter(m=>m.date===today).reduce((a,m)=>a+m.kcal,0);
-        const burn = data.history.filter(h=>h.date===today).reduce((a,h)=>a+(h.kcal||0),0);
+        const mk = moveKcal((data.moves||[]).find(x=>x.date===today), data.weightKg);
+        const burn = data.history.filter(h=>h.date===today).reduce((a,h)=>a+(h.kcal||0),0) + mk.total;
         const target = data.targetKcal||2000;
         const remain = target + burn - intake;
         const frac = Math.min(1, intake/(target+burn||1));
@@ -1073,6 +1086,7 @@ function Home({data, course, setCourse, todayMenu, onStart, onStats, onFood, sav
       <p className="sub" style={{fontSize:11, textAlign:"center", margin:"8px 0 0"}}>
         {course.work}秒動く → {course.rest}秒休む を繰り返すだけ。無理せず自分のペースで。
       </p>
+      <p style={{fontSize:9, textAlign:"center", margin:"4px 0 0", color:"var(--line)"}}>{APP_VERSION}</p>
 
       {/* 設定モーダル */}
       {showSet && (
@@ -1087,6 +1101,7 @@ function Home({data, course, setCourse, todayMenu, onStart, onStats, onFood, sav
             <p className="sub" style={{fontSize:11, margin:"10px 0 0", lineHeight:1.6}}>
               ダイエット目的なら、普段の摂取量から300〜500kcalほど控えめが目安です。極端な制限は続かないので禁物!
             </p>
+            <p className="sub" style={{fontSize:10, margin:"8px 0 0", textAlign:"center"}}>ポケトレ {APP_VERSION}</p>
             <button onClick={()=>{
               const wk = Math.max(25, Math.min(200, Number(w)||60));
               const tk = Math.max(800, Math.min(5000, Number(t)||2000));
@@ -1305,6 +1320,8 @@ function Food({data, onBack, onSave}){
   const [kcalTouched, setKcalTouched] = useState(false);
   const [added, setAdded] = useState("");
   const [wIn, setWIn] = useState("");
+  const [sIn, setSIn] = useState("");
+  const [bIn, setBIn] = useState("");
 
   const today = todayStr();
   const isToday = viewDate === today;
@@ -1322,8 +1339,10 @@ function Food({data, onBack, onSave}){
   const meals = data.meals || [];
   const dayMeals = meals.filter(m => m.date === viewDate);
   const dayWorkouts = data.history.filter(h => h.date === viewDate);
+  const dayMove = (data.moves||[]).find(x => x.date === viewDate);
+  const mk = moveKcal(dayMove, data.weightKg);
   const intake = dayMeals.reduce((a,m) => a + m.kcal, 0);
-  const burn = dayWorkouts.reduce((a,h) => a + (h.kcal||0), 0);
+  const burn = dayWorkouts.reduce((a,h) => a + (h.kcal||0), 0) + mk.total;
   const target = data.targetKcal || 2000;
   const remain = target + burn - intake;
   const frac = Math.min(1, intake / ((target+burn)||1));
@@ -1361,6 +1380,16 @@ function Food({data, onBack, onSave}){
     if(isToday) patch.weightKg = kg;
     onSave({...data, ...patch});
     setWIn("");
+  };
+
+  /* 歩数・自転車の記録(選択中の日付・上書き保存) */
+  const saveMove = () => {
+    const steps = Math.max(0, Math.min(100000, Math.round(Number(sIn)) || (dayMove ? dayMove.steps : 0) || 0));
+    const bikeKm = Math.max(0, Math.min(300, Math.round((Number(bIn) || (dayMove ? dayMove.bikeKm : 0) || 0)*10)/10));
+    if(sIn==="" && bIn==="") return;
+    const rest = (data.moves||[]).filter(x => x.date !== viewDate);
+    onSave({...data, moves:[...rest, {date:viewDate, steps, bikeKm}].slice(-365)});
+    setSIn(""); setBIn("");
   };
 
   /* 表記ゆれに強い正規化(全角半角・ひらがな→カタカナ・空白除去) */
@@ -1439,6 +1468,39 @@ function Food({data, onBack, onSave}){
             {dayWeight ? "修正" : "記録"}
           </button>
         </div>
+      </div>
+
+      {/* この日の歩数・自転車 */}
+      <div className="card" style={{padding:"12px 16px", marginTop:10}}>
+        <div className="row" style={{justifyContent:"space-between"}}>
+          <span className="sub" style={{fontSize:12, fontWeight:800}}>🚶🚴 {dateLabel}の活動</span>
+          {mk.total>0 && <span style={{fontSize:12, fontWeight:800, color:"var(--teal)"}}>✓ 合計 約{mk.total} kcal 消費</span>}
+        </div>
+        <div className="row" style={{gap:8, marginTop:8}}>
+          <div style={{flex:1}}>
+            <label className="sub" style={{fontSize:10, fontWeight:800}}>歩数(歩)</label>
+            <input className="field" type="number" inputMode="numeric"
+              placeholder={dayMove && dayMove.steps ? String(dayMove.steps) : "例: 8000"}
+              value={sIn} onChange={e=>setSIn(e.target.value)} style={{marginTop:2}}/>
+          </div>
+          <div style={{flex:1}}>
+            <label className="sub" style={{fontSize:10, fontWeight:800}}>自転車(km)</label>
+            <input className="field" type="number" inputMode="decimal" step="0.1"
+              placeholder={dayMove && dayMove.bikeKm ? String(dayMove.bikeKm) : "例: 2"}
+              value={bIn} onChange={e=>setBIn(e.target.value)} style={{marginTop:2}}/>
+          </div>
+          <button onClick={saveMove} style={{padding:"11px 18px", borderRadius:14, background:"var(--ink)", color:"#fff", fontWeight:800, fontSize:14, flexShrink:0, alignSelf:"flex-end"}}>
+            {dayMove ? "更新" : "記録"}
+          </button>
+        </div>
+        {dayMove && (mk.steps>0 || mk.bike>0) && (
+          <p className="sub" style={{fontSize:11, margin:"8px 0 0"}}>
+            {dayMove.steps>0 && `🚶 ${dayMove.steps.toLocaleString()}歩 ≈ ${mk.steps} kcal`}
+            {dayMove.steps>0 && dayMove.bikeKm>0 && " ・ "}
+            {dayMove.bikeKm>0 && `🚴 ${dayMove.bikeKm}km ≈ ${mk.bike} kcal`}
+            (摂取できるカロリーに加算されます)
+          </p>
+        )}
       </div>
 
       {/* この日のアクティビティ */}
