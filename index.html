@@ -22,7 +22,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
 <style>
 :root{
@@ -85,23 +84,6 @@ button:focus-visible{outline:3px solid var(--accent); outline-offset:2px;}
   content:""; position:absolute; left:-8px; top:50%; transform:translateY(-50%);
   border:8px solid transparent; border-right-color:var(--card); border-left:none;
 }
-
-input.field{
-  font-family:inherit; width:100%; margin-top:6px; padding:11px 14px;
-  border:1.5px solid var(--line); border-radius:14px; font-size:16px; font-weight:700;
-  color:var(--ink); background:var(--bg); outline:none;
-}
-input.field:focus{border-color:var(--accent);}
-.foodchip{
-  border:1px solid var(--line); background:var(--card); border-radius:999px;
-  padding:7px 12px; font-size:12px; font-weight:700; transition:transform .1s;
-}
-.foodchip:active{transform:scale(.94); background:var(--accent-soft);}
-.mealtab{
-  flex:1; padding:8px 0; border-radius:999px; font-size:13px; font-weight:800;
-  background:var(--card); border:1px solid var(--line); color:var(--sub);
-}
-.mealtab.on{background:var(--ink); color:#fff; border-color:var(--ink);}
 
 @keyframes pop{0%{transform:scale(.4);opacity:0}70%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
 @keyframes rise{0%{transform:translateY(14px);opacity:0}100%{transform:translateY(0);opacity:1}}
@@ -176,87 +158,8 @@ const stageOf = (level) => level >= 10 ? 5 : level >= 8 ? 4 : level >= 5 ? 3 : l
 
 const DEFAULT_DATA = {
   xp:0, streak:0, bestStreak:0, lastDate:null,
-  totalWorkouts:0, totalMinutes:0, totalBurn:0, history:[],
-  weightKg:60, targetKcal:2000, meals:[], weights:[],
+  totalWorkouts:0, totalMinutes:0, history:[],
 };
-
-/* サーキットトレーニング(高強度自重)≒ 8METs での推定消費カロリー */
-const burnKcal = (minutes, weightKg) => Math.round(8 * (weightKg||60) * (minutes/60) * 1.05);
-
-/* 食事タイプ */
-const MEAL_TYPES = ["朝食","昼食","夕食","間食"];
-const guessMeal = () => { const h=new Date().getHours(); return h<10?"朝食":h<15?"昼食":h<21?"夕食":"間食"; };
-
-/* よくある食品のカロリー目安(kcal) */
-const FOODS = [
-  {cat:"主食", name:"ごはん 茶碗1杯", kcal:234},
-  {cat:"主食", name:"おにぎり 1個", kcal:180},
-  {cat:"主食", name:"食パン 6枚切1枚", kcal:160},
-  {cat:"主食", name:"かけうどん 1杯", kcal:320},
-  {cat:"主食", name:"ラーメン 1杯", kcal:500},
-  {cat:"主食", name:"カレーライス", kcal:760},
-  {cat:"主食", name:"ミートパスタ", kcal:600},
-  {cat:"主食", name:"牛丼 並盛", kcal:650},
-  {cat:"主食", name:"チャーハン", kcal:650},
-  {cat:"主食", name:"菓子パン 1個", kcal:400},
-  {cat:"主食", name:"にぎり寿司 10貫", kcal:500},
-  {cat:"主食", name:"親子丼", kcal:650},
-  {cat:"主食", name:"カツ丼", kcal:900},
-  {cat:"主食", name:"オムライス", kcal:700},
-  {cat:"主食", name:"天ぷらそば", kcal:450},
-  {cat:"主食", name:"サンドイッチ 1個", kcal:300},
-  {cat:"主食", name:"ピザ 2切れ", kcal:400},
-  {cat:"主食", name:"ハンバーガー 1個", kcal:300},
-  {cat:"主食", name:"カップ麺 1個", kcal:400},
-  {cat:"主菜", name:"唐揚げ 3個", kcal:250},
-  {cat:"主菜", name:"焼き鮭 1切", kcal:130},
-  {cat:"主菜", name:"生姜焼き", kcal:350},
-  {cat:"主菜", name:"ハンバーグ", kcal:400},
-  {cat:"主菜", name:"目玉焼き 1個", kcal:90},
-  {cat:"主菜", name:"納豆 1パック", kcal:100},
-  {cat:"主菜", name:"冷奴 半丁", kcal:110},
-  {cat:"主菜", name:"刺身 盛り合わせ", kcal:150},
-  {cat:"主菜", name:"焼き鳥 3本", kcal:250},
-  {cat:"主菜", name:"餃子 6個", kcal:350},
-  {cat:"主菜", name:"サラダチキン 1個", kcal:110},
-  {cat:"主菜", name:"ゆで卵 1個", kcal:76},
-  {cat:"主菜", name:"サバ缶 1缶", kcal:300},
-  {cat:"主菜", name:"コロッケ 1個", kcal:160},
-  {cat:"主菜", name:"エビフライ 2本", kcal:200},
-  {cat:"主菜", name:"ステーキ 150g", kcal:400},
-  {cat:"副菜", name:"味噌汁", kcal:50},
-  {cat:"副菜", name:"豚汁", kcal:120},
-  {cat:"副菜", name:"サラダ(ドレッシング込)", kcal:80},
-  {cat:"副菜", name:"ポテトサラダ", kcal:170},
-  {cat:"副菜", name:"きんぴらごぼう", kcal:80},
-  {cat:"副菜", name:"枝豆", kcal:100},
-  {cat:"間食", name:"ポテトチップス 1袋", kcal:330},
-  {cat:"間食", name:"チョコレート 数片", kcal:150},
-  {cat:"間食", name:"クッキー 2枚", kcal:100},
-  {cat:"間食", name:"アイスクリーム 1個", kcal:200},
-  {cat:"間食", name:"プリン 1個", kcal:130},
-  {cat:"間食", name:"シュークリーム 1個", kcal:230},
-  {cat:"間食", name:"りんご 1個", kcal:140},
-  {cat:"間食", name:"バナナ 1本", kcal:90},
-  {cat:"間食", name:"ヨーグルト 1個", kcal:80},
-  {cat:"間食", name:"ミックスナッツ ひとつかみ", kcal:180},
-  {cat:"間食", name:"ショートケーキ 1切", kcal:350},
-  {cat:"間食", name:"大福 1個", kcal:120},
-  {cat:"間食", name:"せんべい 2枚", kcal:80},
-  {cat:"間食", name:"プロテイン 1杯", kcal:120},
-  {cat:"飲み物", name:"ビール 350ml", kcal:140},
-  {cat:"飲み物", name:"ハイボール 1杯", kcal:70},
-  {cat:"飲み物", name:"缶チューハイ 350ml", kcal:180},
-  {cat:"飲み物", name:"コーラ 350ml", kcal:160},
-  {cat:"飲み物", name:"カフェラテ 1杯", kcal:120},
-  {cat:"飲み物", name:"オレンジジュース 1杯", kcal:90},
-  {cat:"飲み物", name:"牛乳 コップ1杯", kcal:130},
-  {cat:"飲み物", name:"ワイン グラス1杯", kcal:90},
-  {cat:"飲み物", name:"日本酒 1合", kcal:200},
-  {cat:"飲み物", name:"コーヒー(無糖)", kcal:5},
-  {cat:"飲み物", name:"緑茶・お茶", kcal:0},
-];
-const FOOD_CATS = ["主食","主菜","副菜","間食","飲み物"];
 
 /* ---------- ユーティリティ ---------- */
 const pad = (n) => String(n).padStart(2,"0");
@@ -402,269 +305,6 @@ function Mela({stage=1, mood="happy", size=150, cheering=false}){
   );
 }
 
-/* ============================================================
-   3D動作デモ(Three.js)
-   関節付きの人型フィギュアを組み立て、種目ごとの動きをループ再生
-   ============================================================ */
-const SIDE_VIEW = new Set(["マウンテンクライマー","プランク","膝つき腕立て","バイシクルクランチ","ヒップリフト"]);
-
-function buildFigure(THREE){
-  const orange = new THREE.MeshStandardMaterial({color:0xFF5A2D, roughness:.55});
-  const gold   = new THREE.MeshStandardMaterial({color:0xFFB020, roughness:.55});
-  const dark   = new THREE.MeshStandardMaterial({color:0x1C2B26, roughness:.6});
-
-  /* 関節を原点とし、-y方向に伸びるパーツ。tipが末端の取り付け点 */
-  const seg = (r1, r2, h, mat) => {
-    const g = new THREE.Group();
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, h, 10), mat);
-    m.position.y = -h/2; g.add(m);
-    g.add(new THREE.Mesh(new THREE.SphereGeometry(r1*1.06, 10, 8), mat));
-    const tip = new THREE.Group(); tip.position.y = -h; g.add(tip);
-    return {g, tip};
-  };
-
-  const root = new THREE.Group(); root.position.y = 0.95;
-  const pelvis = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 10), orange);
-  pelvis.scale.set(1.15, 0.8, 0.85); root.add(pelvis);
-
-  const torso = new THREE.Group(); root.add(torso);
-  const chest = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.125, 0.5, 12), orange);
-  chest.position.y = 0.3; torso.add(chest);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.145, 14, 12), gold);
-  head.position.y = 0.73; torso.add(head);
-  const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 8), dark);
-  const eyeR = eyeL.clone();
-  eyeL.position.set(-0.05, 0.76, 0.125); eyeR.position.set(0.05, 0.76, 0.125);
-  torso.add(eyeL); torso.add(eyeR);
-
-  const mkArm = (sx) => {
-    const sh = new THREE.Group(); sh.position.set(sx*0.225, 0.52, 0); torso.add(sh);
-    const up = seg(0.052, 0.046, 0.27, orange); sh.add(up.g);
-    const el = new THREE.Group(); up.tip.add(el);
-    const fo = seg(0.046, 0.04, 0.25, orange); el.add(fo.g);
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), gold);
-    fo.tip.add(hand);
-    return {sh, el};
-  };
-  const armL = mkArm(-1), armR = mkArm(1);
-
-  const mkLeg = (sx) => {
-    const hip = new THREE.Group(); hip.position.set(sx*0.115, -0.06, 0); root.add(hip);
-    const th = seg(0.072, 0.056, 0.4, orange); hip.add(th.g);
-    const knee = new THREE.Group(); th.tip.add(knee);
-    const sh2 = seg(0.052, 0.045, 0.4, orange); knee.add(sh2.g);
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.095, 0.06, 0.21), dark);
-    foot.position.set(0, -0.015, 0.055); sh2.tip.add(foot);
-    return {hip, knee};
-  };
-  const legL = mkLeg(-1), legR = mkLeg(1);
-
-  return {
-    root, torso,
-    shL:armL.sh, shR:armR.sh, elL:armL.el, elR:armR.el,
-    hipL:legL.hip, hipR:legR.hip, kneeL:legL.knee, kneeR:legR.knee,
-  };
-}
-
-function resetPose(f){
-  f.root.position.set(0, 0.95, 0);
-  f.root.rotation.set(0, 0, 0);
-  [f.torso, f.shL, f.shR, f.elL, f.elR, f.hipL, f.hipR, f.kneeL, f.kneeR]
-    .forEach(o => o.rotation.set(0, 0, 0));
-  f.shL.rotation.z = -0.12; f.shR.rotation.z = 0.12; /* 気をつけの姿勢 */
-}
-
-/* キーフレーム線形補間(バーピー用) */
-function lerpKeys(keys, u){
-  for(let i=0; i<keys.length-1; i++){
-    if(u >= keys[i].u && u <= keys[i+1].u){
-      const a=keys[i].p, b=keys[i+1].p;
-      const s=(u-keys[i].u)/(keys[i+1].u-keys[i].u);
-      const out={};
-      Object.keys(a).forEach(k => out[k] = a[k] + (b[k]-a[k])*s);
-      return out;
-    }
-  }
-  return keys[0].p;
-}
-
-const POSES = {
-  "ジャンピングジャック": (f,t)=>{
-    const u=(Math.sin(t*7)+1)/2;
-    f.shL.rotation.z=-(0.12+u*2.7); f.shR.rotation.z=0.12+u*2.7;
-    f.hipL.rotation.z=-u*0.5; f.hipR.rotation.z=u*0.5;
-    f.root.position.y=0.95+Math.max(0,Math.sin(t*7))*0.1;
-  },
-  "スクワット": (f,t)=>{
-    const c=(1-Math.cos(t*3))/2;
-    f.hipL.rotation.x=f.hipR.rotation.x=-1.5*c;
-    f.kneeL.rotation.x=f.kneeR.rotation.x=1.9*c;
-    f.root.position.y=0.95-0.34*c;
-    f.torso.rotation.x=0.45*c;
-    f.shL.rotation.x=f.shR.rotation.x=-1.25*c;
-  },
-  "もも上げ(ハイニー)": (f,t)=>{
-    const a=Math.max(0,Math.sin(t*7)), b=Math.max(0,-Math.sin(t*7));
-    f.hipL.rotation.x=-1.5*a; f.kneeL.rotation.x=1.4*a+0.1;
-    f.hipR.rotation.x=-1.5*b; f.kneeR.rotation.x=1.4*b+0.1;
-    f.shL.rotation.x=0.5*a-0.9*b; f.shR.rotation.x=0.5*b-0.9*a;
-    f.elL.rotation.x=f.elR.rotation.x=-1.15;
-    f.root.position.y=0.95+0.03*Math.abs(Math.sin(t*7));
-  },
-  "マウンテンクライマー": (f,t)=>{
-    f.root.position.y=0.52; f.root.rotation.x=1.25;
-    f.shL.rotation.x=f.shR.rotation.x=-1.05;
-    f.torso.rotation.x=0.1;
-    const a=Math.max(0,Math.sin(t*8)), b=Math.max(0,-Math.sin(t*8));
-    f.hipL.rotation.x=-1.35*a+0.15; f.kneeL.rotation.x=1.6*a;
-    f.hipR.rotation.x=-1.35*b+0.15; f.kneeR.rotation.x=1.6*b;
-  },
-  "プランク": (f,t)=>{
-    f.root.position.y=0.52+Math.sin(t*2)*0.008;
-    f.root.rotation.x=1.3;
-    f.shL.rotation.x=f.shR.rotation.x=-1.05;
-    f.hipL.rotation.x=f.hipR.rotation.x=0.13;
-    f.torso.rotation.x=0.08;
-  },
-  "ゆるバーピー": (f,t)=>{
-    const keys=[
-      {u:0.00, p:{ry:0.95, rx:0,    tx:0,    shx:0,     hip:0,     knee:0   }},
-      {u:0.22, p:{ry:0.55, rx:0.15, tx:0.9,  shx:-1.9,  hip:-1.7,  knee:2.1 }},
-      {u:0.45, p:{ry:0.52, rx:1.25, tx:0.05, shx:-1.05, hip:0.12,  knee:0.1 }},
-      {u:0.68, p:{ry:0.55, rx:0.15, tx:0.9,  shx:-1.9,  hip:-1.7,  knee:2.1 }},
-      {u:0.88, p:{ry:0.95, rx:0,    tx:0,    shx:0,     hip:0,     knee:0   }},
-      {u:1.00, p:{ry:0.95, rx:0,    tx:0,    shx:0,     hip:0,     knee:0   }},
-    ];
-    const p=lerpKeys(keys,(t%3.4)/3.4);
-    f.root.position.y=p.ry; f.root.rotation.x=p.rx; f.torso.rotation.x=p.tx;
-    f.shL.rotation.x=f.shR.rotation.x=p.shx;
-    f.hipL.rotation.x=f.hipR.rotation.x=p.hip;
-    f.kneeL.rotation.x=f.kneeR.rotation.x=p.knee;
-  },
-  "フロントランジ": (f,t)=>{
-    const s=Math.sin(t*2.2), m=Math.abs(s), L=s>0;
-    const fr=L?f.hipL:f.hipR, frK=L?f.kneeL:f.kneeR;
-    const bk=L?f.hipR:f.hipL, bkK=L?f.kneeR:f.kneeL;
-    fr.rotation.x=-1.05*m; frK.rotation.x=1.05*m;
-    bk.rotation.x=0.45*m;  bkK.rotation.x=1.15*m;
-    f.root.position.y=0.95-0.28*m;
-    f.torso.rotation.x=0.12*m;
-    f.shL.rotation.x=(L?-0.5:0.4)*m; f.shR.rotation.x=(L?0.4:-0.5)*m;
-  },
-  "膝つき腕立て": (f,t)=>{
-    const c=(1-Math.cos(t*3))/2;
-    f.root.position.y=0.6-0.1*c; f.root.rotation.x=0.95+0.13*c;
-    f.hipL.rotation.x=f.hipR.rotation.x=-0.55;
-    f.kneeL.rotation.x=f.kneeR.rotation.x=1.75;
-    f.shL.rotation.x=f.shR.rotation.x=-0.75-0.18*c;
-    f.elL.rotation.x=f.elR.rotation.x=-(0.15+c*1.15);
-  },
-  "バイシクルクランチ": (f,t)=>{
-    f.root.position.y=0.33; f.root.rotation.x=-1.45;
-    const a=Math.sin(t*5);
-    f.hipL.rotation.x=-1.1-0.5*a; f.kneeL.rotation.x=1.2-0.9*a;
-    f.hipR.rotation.x=-1.1+0.5*a; f.kneeR.rotation.x=1.2+0.9*a;
-    f.torso.rotation.x=0.5; f.torso.rotation.y=0.25*a;
-    f.shL.rotation.z=-2.55; f.shR.rotation.z=2.55;
-    f.elL.rotation.x=f.elR.rotation.x=-1.3;
-  },
-  "スケータージャンプ": (f,t)=>{
-    const s=Math.sin(t*3.5);
-    f.root.position.x=0.35*s;
-    f.root.position.y=0.9+0.07*Math.abs(Math.cos(t*3.5));
-    f.root.rotation.z=-0.13*s;
-    f.torso.rotation.x=0.35;
-    f.hipL.rotation.z=0.3*s; f.hipR.rotation.z=0.3*s;
-    f.kneeL.rotation.x=f.kneeR.rotation.x=0.55;
-    f.shL.rotation.x=-0.6-0.5*s; f.shR.rotation.x=-0.6+0.5*s;
-    f.elL.rotation.x=f.elR.rotation.x=-0.9;
-  },
-  "ヒップリフト": (f,t)=>{
-    const c=(1-Math.cos(t*2.4))/2;
-    f.root.position.y=0.3+0.17*c;
-    f.root.rotation.x=-1.5+0.55*c;
-    f.hipL.rotation.x=f.hipR.rotation.x=-0.9+0.3*c;
-    f.kneeL.rotation.x=f.kneeR.rotation.x=1.9-0.35*c;
-    f.shL.rotation.z=-0.35; f.shR.rotation.z=0.35;
-  },
-  "その場ジョギング": (f,t)=>{
-    const a=Math.max(0,Math.sin(t*6)), b=Math.max(0,-Math.sin(t*6));
-    f.hipL.rotation.x=-0.7*a+0.15*b; f.kneeL.rotation.x=1.0*a+0.12;
-    f.hipR.rotation.x=-0.7*b+0.15*a; f.kneeR.rotation.x=1.0*b+0.12;
-    f.shL.rotation.x=0.5*a-0.7*b; f.shR.rotation.x=0.5*b-0.7*a;
-    f.elL.rotation.x=f.elR.rotation.x=-1.2;
-    f.root.position.y=0.95+0.02*Math.abs(Math.sin(t*6));
-  },
-};
-
-/* 3Dデモモーダル */
-function ExerciseDemo({name, onClose}){
-  const ref = useRef(null);
-  const ex = EXERCISES.find(e => e.name === name);
-
-  useEffect(()=>{
-    const THREE = window.THREE;
-    if(!THREE || !ref.current) return;
-    const W = Math.min(330, window.innerWidth - 88), H = W * 0.92;
-
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xF3F5EF);
-    const camera = new THREE.PerspectiveCamera(42, W/H, 0.1, 50);
-    if(SIDE_VIEW.has(name)) camera.position.set(3.3, 1.25, 1.1);
-    else camera.position.set(1.15, 1.5, 3.7);
-    camera.lookAt(0, 0.8, 0);
-
-    const renderer = new THREE.WebGLRenderer({antialias:true});
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
-    renderer.setSize(W, H);
-    ref.current.appendChild(renderer.domElement);
-
-    scene.add(new THREE.HemisphereLight(0xffffff, 0xD8DCD2, 0.95));
-    const dl = new THREE.DirectionalLight(0xffffff, 0.7);
-    dl.position.set(2, 4, 3); scene.add(dl);
-
-    const ground = new THREE.Mesh(
-      new THREE.CircleGeometry(1.7, 40),
-      new THREE.MeshStandardMaterial({color:0xE3E8E1, roughness:1})
-    );
-    ground.rotation.x = -Math.PI/2; scene.add(ground);
-
-    const fig = buildFigure(THREE);
-    scene.add(fig.root);
-    const pose = POSES[name] || POSES["その場ジョギング"];
-
-    let raf; const t0 = performance.now();
-    const loop = () => {
-      const t = (performance.now() - t0) / 1000;
-      resetPose(fig);
-      pose(fig, t);
-      renderer.render(scene, camera);
-      raf = requestAnimationFrame(loop);
-    };
-    loop();
-    return () => {
-      cancelAnimationFrame(raf);
-      renderer.dispose();
-      if(ref.current) ref.current.innerHTML = "";
-    };
-  }, [name]);
-
-  return (
-    <div style={{position:"fixed", inset:0, background:"rgba(28,43,38,.55)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:60, padding:22}}
-      onClick={onClose}>
-      <div className="card anim-pop" style={{padding:18, width:"100%", maxWidth:380, textAlign:"center"}} onClick={e=>e.stopPropagation()}>
-        <h3 style={{fontSize:18, fontWeight:800, margin:"0 0 2px"}}>{ex ? ex.emoji : "🏃"} {name}</h3>
-        {ex && <p className="sub" style={{fontSize:12, margin:"0 0 10px"}}>{ex.tip}</p>}
-        <div ref={ref} style={{display:"flex", justifyContent:"center", borderRadius:18, overflow:"hidden", border:"1px solid var(--line)"}}>
-          {!window.THREE && <p className="sub" style={{fontSize:12, padding:30}}>3D表示を読み込めませんでした(通信環境をご確認ください)</p>}
-        </div>
-        <p className="sub" style={{fontSize:10, margin:"8px 0 0"}}>※ 動きのイメージです。実際は無理のない範囲・正しいフォームで行ってください</p>
-        <button onClick={onClose} className="btn-dark" style={{marginTop:12, fontSize:15, padding:12}}>閉じる</button>
-      </div>
-    </div>
-  );
-}
-
 /* メラのセリフ */
 const LINES = {
   notDone: ["今日も一緒に燃えよう!🔥","5分だけ、どう?","動くとボクも育つよ!","スキマ時間、いまがチャンス!"],
@@ -711,7 +351,6 @@ function App(){
     const xp = data.xp + gained;
     const newLv = levelFromXp(xp).level;
     const evolved = stageOf(newLv) > stageOf(prevLv);
-    const kcal = burnKcal(c.minutes, data.weightKg);
 
     const d = {
       ...data, xp, streak,
@@ -719,12 +358,11 @@ function App(){
       lastDate: today,
       totalWorkouts: data.totalWorkouts+1,
       totalMinutes: data.totalMinutes+c.minutes,
-      totalBurn: (data.totalBurn||0)+kcal,
-      history: [...data.history, {date:today, minutes:c.minutes, xp:gained, kcal, course:c.label}].slice(-90),
+      history: [...data.history, {date:today, minutes:c.minutes, xp:gained, course:c.label}].slice(-90),
     };
     saveData(d);
     setResult({
-      xp:gained, streakBonus, streak, minutes:c.minutes, kcal,
+      xp:gained, streakBonus, streak, minutes:c.minutes,
       leveledUp:newLv>prevLv, newLevel:newLv,
       evolved, newStage: STAGES[stageOf(newLv)-1],
     });
@@ -736,9 +374,7 @@ function App(){
   return (
     <div className="app">
       {screen==="home" && <Home data={data} course={course} setCourse={setCourse} todayMenu={todayMenu}
-        onStart={()=>setScreen("workout")} onStats={()=>setScreen("stats")} onFood={()=>setScreen("food")}
-        saveSettings={(patch)=>saveData({...data, ...patch})} />}
-      {screen==="food" && <Food data={data} onBack={()=>setScreen("home")} onSave={saveData} />}
+        onStart={()=>setScreen("workout")} onStats={()=>setScreen("stats")} />}
       {screen==="workout" && <Workout course={course} menu={todayMenu.slice(0,course.count)} level={levelFromXp(data.xp).level}
         onFinish={()=>finishWorkout(course)} onQuit={()=>setScreen("home")} />}
       {screen==="done" && <Done result={result} data={data} onHome={()=>setScreen("home")} />}
@@ -748,12 +384,7 @@ function App(){
 }
 
 /* ---------- ホーム ---------- */
-function Home({data, course, setCourse, todayMenu, onStart, onStats, onFood, saveSettings}){
-  const [showSet, setShowSet] = useState(false);
-  const [w, setW] = useState(String(data.weightKg||60));
-  const [t, setT] = useState(String(data.targetKcal||2000));
-  const [wIn, setWIn] = useState("");
-  const [demo, setDemo] = useState(null);
+function Home({data, course, setCourse, todayMenu, onStart, onStats}){
   const lv = levelFromXp(data.xp);
   const stage = stageOf(lv.level);
   const stageInfo = STAGES[stage-1];
@@ -782,10 +413,7 @@ function Home({data, course, setCourse, todayMenu, onStart, onStats, onFood, sav
             {doneToday ? "今日もクリア済み 🎉" : "今日の5分、燃やそう"}
           </h1>
         </div>
-        <div className="row" style={{gap:6}}>
-          <button onClick={()=>setShowSet(true)} aria-label="設定" className="card" style={{padding:"10px 12px", borderRadius:16, fontSize:17}}>⚙️</button>
-          <button onClick={onStats} aria-label="記録を見る" className="card" style={{padding:"10px 12px", borderRadius:16, fontSize:17}}>📊</button>
-        </div>
+        <button onClick={onStats} aria-label="記録を見る" className="card" style={{padding:"10px 12px", borderRadius:16, fontSize:17}}>📊</button>
       </div>
 
       {/* キャラクター */}
@@ -839,66 +467,6 @@ function Home({data, course, setCourse, todayMenu, onStart, onStats, onFood, sav
         ))}
       </div>
 
-      {/* 今日のカロリー */}
-      {(()=>{
-        const today = todayStr();
-        const intake = (data.meals||[]).filter(m=>m.date===today).reduce((a,m)=>a+m.kcal,0);
-        const burn = data.history.filter(h=>h.date===today).reduce((a,h)=>a+(h.kcal||0),0);
-        const target = data.targetKcal||2000;
-        const remain = target + burn - intake;
-        const frac = Math.min(1, intake/(target+burn||1));
-        return (
-          <button onClick={onFood} className="card" style={{padding:16, marginTop:12, textAlign:"left", width:"100%", display:"block"}}>
-            <div className="row" style={{justifyContent:"space-between"}}>
-              <span className="sub" style={{fontSize:12, fontWeight:800}}>🍽 今日のカロリー</span>
-              <span style={{fontSize:12, fontWeight:800, color:"var(--accent)"}}>記録・編集 ›</span>
-            </div>
-            <div className="row" style={{gap:4, alignItems:"baseline", marginTop:4}}>
-              <span className="bebas" style={{fontSize:28, lineHeight:1}}>{intake}</span>
-              <span className="sub" style={{fontSize:12, fontWeight:800}}>/ {target+burn} kcal</span>
-              {burn>0 && <span style={{fontSize:11, fontWeight:800, color:"var(--teal)", marginLeft:4}}>(運動で +{burn})</span>}
-            </div>
-            <div style={{marginTop:8, height:10, borderRadius:999, background:"var(--accent-soft)", overflow:"hidden"}}>
-              <div style={{height:"100%", width:`${frac*100}%`, background:remain<0?"#D93025":"var(--accent)", borderRadius:999, transition:"width .5s"}}/>
-            </div>
-            <p className="sub" style={{fontSize:11, margin:"6px 0 0"}}>
-              {remain>=0 ? `あと ${remain} kcal 食べられます` : `${-remain} kcal オーバー。明日また調整しよう`}
-            </p>
-          </button>
-        );
-      })()}
-
-      {/* 今日の体重 */}
-      {(()=>{
-        const today = todayStr();
-        const ws = [...(data.weights||[])].sort((a,b)=>a.date<b.date?-1:1);
-        const todayW = ws.find(x=>x.date===today);
-        const prev = [...ws].reverse().find(x=>x.date<today);
-        const diff = todayW && prev ? Math.round((todayW.kg-prev.kg)*10)/10 : null;
-        return (
-          <div className="card" style={{padding:16, marginTop:12}}>
-            <div className="row" style={{justifyContent:"space-between"}}>
-              <span className="sub" style={{fontSize:12, fontWeight:800}}>⚖️ 今日の体重</span>
-              {todayW && <span style={{fontSize:12, fontWeight:800, color:"var(--teal)"}}>✓ 記録済み {todayW.kg}kg{diff!==null && ` (前回比 ${diff>0?"+":""}${diff}kg)`}</span>}
-            </div>
-            <div className="row" style={{gap:8, marginTop:8}}>
-              <input className="field" type="number" inputMode="decimal" step="0.1"
-                placeholder={prev?`前回 ${prev.kg} kg`:(todayW?String(todayW.kg):"例: 65.5")}
-                value={wIn} onChange={e=>setWIn(e.target.value)} style={{marginTop:0, flex:1}}/>
-              <button onClick={()=>{
-                const kg = Math.round((Number(wIn)||0)*10)/10;
-                if(kg<25||kg>200) return;
-                const rest = (data.weights||[]).filter(x=>x.date!==today);
-                saveSettings({weights:[...rest, {date:today, kg}].slice(-365), weightKg:kg});
-                setWIn("");
-              }} style={{padding:"11px 18px", borderRadius:14, background:"var(--ink)", color:"#fff", fontWeight:800, fontSize:14, flexShrink:0}}>
-                {todayW?"更新":"記録"}
-              </button>
-            </div>
-          </div>
-        );
-      })()}
-
       {/* コース */}
       <p className="sub" style={{fontSize:13, fontWeight:800, margin:"18px 0 8px"}}>コースを選ぶ</p>
       <div style={{display:"flex", flexDirection:"column", gap:8}}>
@@ -916,13 +484,9 @@ function Home({data, course, setCourse, todayMenu, onStart, onStats, onFood, sav
         })}
       </div>
 
-      <p className="sub" style={{fontSize:11, margin:"12px 0 6px"}}>今日のメニュー(タップで動きを3Dプレビュー・毎日入れ替わります)</p>
-      <div className="row" style={{flexWrap:"wrap", gap:6}}>
-        {todayMenu.slice(0,course.count).map((e,i)=>(
-          <button key={i} className="foodchip" onClick={()=>setDemo(e.name)}>{e.emoji} {e.name}</button>
-        ))}
-      </div>
-      {demo && <ExerciseDemo name={demo} onClose={()=>setDemo(null)}/>}
+      <p className="sub" style={{fontSize:11, lineHeight:1.7, margin:"10px 0 0"}}>
+        今日のメニュー: {todayMenu.slice(0,course.count).map(e=>e.name).join("・")}(毎日入れ替わります)
+      </p>
 
       <div style={{flex:1}}/>
       <button onClick={onStart} className="btn-start">
@@ -931,29 +495,6 @@ function Home({data, course, setCourse, todayMenu, onStart, onStats, onFood, sav
       <p className="sub" style={{fontSize:11, textAlign:"center", margin:"8px 0 0"}}>
         30秒動く → 15秒休む を繰り返すだけ。無理せず自分のペースで。
       </p>
-
-      {/* 設定モーダル */}
-      {showSet && (
-        <div style={{position:"fixed", inset:0, background:"rgba(28,43,38,.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:50, padding:24}}
-          onClick={()=>setShowSet(false)}>
-          <div className="card anim-pop" style={{padding:22, width:"100%", maxWidth:340}} onClick={e=>e.stopPropagation()}>
-            <h3 style={{fontSize:18, fontWeight:800, margin:"0 0 14px"}}>⚙️ 設定</h3>
-            <label className="sub" style={{fontSize:12, fontWeight:800, display:"block"}}>体重(kg)— 消費カロリー計算に使用</label>
-            <input type="number" inputMode="decimal" value={w} onChange={e=>setW(e.target.value)} className="field"/>
-            <label className="sub" style={{fontSize:12, fontWeight:800, display:"block", marginTop:12}}>1日の目標摂取カロリー(kcal)</label>
-            <input type="number" inputMode="numeric" value={t} onChange={e=>setT(e.target.value)} className="field"/>
-            <p className="sub" style={{fontSize:11, margin:"10px 0 0", lineHeight:1.6}}>
-              ダイエット目的なら、普段の摂取量から300〜500kcalほど控えめが目安です。極端な制限は続かないので禁物!
-            </p>
-            <button onClick={()=>{
-              const wk = Math.max(25, Math.min(200, Number(w)||60));
-              const tk = Math.max(800, Math.min(5000, Number(t)||2000));
-              saveSettings({weightKg:wk, targetKcal:tk});
-              setShowSet(false);
-            }} className="btn-dark" style={{marginTop:16, fontSize:15, padding:13}}>保存する</button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -973,7 +514,6 @@ function Workout({course, menu, level, onFinish, onQuit}){
   const [secLeft, setSecLeft] = useState(phases[0].duration);
   const [paused, setPaused] = useState(false);
   const [quitArmed, setQuitArmed] = useState(false);
-  const [demo, setDemo] = useState(null);
   const {beep, ensure} = useBeeper();
   const finishedRef = useRef(false);
 
@@ -1051,10 +591,6 @@ function Workout({course, menu, level, onFinish, onQuit}){
           {phase.ex.emoji} {phase.ex.name}
         </h2>
         <p className="sub" style={{fontSize:13, margin:"6px 24px 0"}}>{phase.ex.tip}</p>
-        <button onClick={()=>{ setPaused(true); setDemo(phase.ex.name); }}
-          style={{marginTop:8, padding:"7px 16px", borderRadius:999, fontSize:12, fontWeight:800, background:"rgba(255,255,255,.85)", color:"var(--ink)", border:"1px solid var(--line)"}}>
-          🎥 動きを3Dで見る
-        </button>
       </div>
 
       {/* タイマーリング */}
@@ -1089,8 +625,6 @@ function Workout({course, menu, level, onFinish, onQuit}){
           ⏭
         </button>
       </div>
-
-      {demo && <ExerciseDemo name={demo} onClose={()=>setDemo(null)}/>}
     </div>
   );
 }
@@ -1136,11 +670,6 @@ function Done({result, data, onHome}){
         </div>
       </div>
 
-      <div className="card row" style={{width:"100%", padding:"13px 16px", marginTop:12, justifyContent:"space-between"}}>
-        <span className="sub" style={{fontSize:12, fontWeight:800}}>💦 推定消費カロリー</span>
-        <span><span className="bebas" style={{fontSize:26, color:"var(--teal)"}}>約{result.kcal}</span><span className="sub" style={{fontSize:12, fontWeight:800, marginLeft:3}}>kcal</span></span>
-      </div>
-
       <div className="card" style={{width:"100%", padding:16, marginTop:12}}>
         <p className="sub" style={{fontSize:12, fontWeight:800, margin:0}}>✨ 次のレベルまで</p>
         <div style={{marginTop:10, height:12, borderRadius:999, background:"var(--gold-soft)", overflow:"hidden"}}>
@@ -1150,300 +679,6 @@ function Done({result, data, onHome}){
       </div>
 
       <button onClick={onHome} className="btn-dark" style={{marginTop:26}}>ホームに戻る</button>
-    </div>
-  );
-}
-
-/* ---------- デイリー記録(食事・体重・アクティビティの閲覧&編集) ---------- */
-function Food({data, onBack, onSave}){
-  const [viewDate, setViewDate] = useState(todayStr());
-  const [mealType, setMealType] = useState(guessMeal());
-  const [q, setQ] = useState("");
-  const [ckcal, setCkcal] = useState("");
-  const [kcalTouched, setKcalTouched] = useState(false);
-  const [added, setAdded] = useState("");
-  const [wIn, setWIn] = useState("");
-
-  const today = todayStr();
-  const isToday = viewDate === today;
-  const dObj = new Date(viewDate + "T00:00:00");
-  const dateLabel = isToday ? "今日" : `${dObj.getMonth()+1}/${dObj.getDate()}(${"日月火水木金土"[dObj.getDay()]})`;
-
-  const shiftDate = (n) => {
-    const d = new Date(viewDate + "T00:00:00");
-    d.setDate(d.getDate() + n);
-    const ds = dateStrOf(d);
-    if (ds > today) return;
-    setViewDate(ds);
-  };
-
-  const meals = data.meals || [];
-  const dayMeals = meals.filter(m => m.date === viewDate);
-  const dayWorkouts = data.history.filter(h => h.date === viewDate);
-  const intake = dayMeals.reduce((a,m) => a + m.kcal, 0);
-  const burn = dayWorkouts.reduce((a,h) => a + (h.kcal||0), 0);
-  const target = data.targetKcal || 2000;
-  const remain = target + burn - intake;
-  const frac = Math.min(1, intake / ((target+burn)||1));
-
-  const dayWeight = (data.weights||[]).find(x => x.date === viewDate);
-
-  /* 食品追加(選択中の日付に記録) */
-  const addFood = (name, kcal) => {
-    if(!name || !(kcal >= 0)) return;
-    const entry = {id: Date.now()+"-"+Math.floor(Math.random()*1e6), date:viewDate, meal:mealType, name, kcal:Math.round(kcal)};
-    onSave({...data, meals:[...meals, entry].slice(-1500)});
-    setAdded(name); setTimeout(()=>setAdded(""), 1200);
-  };
-  const removeFood = (id) => onSave({...data, meals: meals.filter(m => m.id !== id)});
-
-  /* ワークアウト削除(合計から差し引き。XP・連続記録は保持) */
-  const removeWorkout = (h) => {
-    const i = data.history.indexOf(h);
-    if(i < 0) return;
-    const history = [...data.history]; history.splice(i,1);
-    onSave({
-      ...data, history,
-      totalWorkouts: Math.max(0, data.totalWorkouts-1),
-      totalMinutes: Math.max(0, data.totalMinutes - h.minutes),
-      totalBurn: Math.max(0, (data.totalBurn||0) - (h.kcal||0)),
-    });
-  };
-
-  /* 体重記録(選択中の日付) */
-  const saveWeight = () => {
-    const kg = Math.round((Number(wIn)||0)*10)/10;
-    if(kg < 25 || kg > 200) return;
-    const rest = (data.weights||[]).filter(x => x.date !== viewDate);
-    const patch = {weights:[...rest, {date:viewDate, kg}].sort((a,b)=>a.date<b.date?-1:1).slice(-365)};
-    if(isToday) patch.weightKg = kg;
-    onSave({...data, ...patch});
-    setWIn("");
-  };
-
-  /* 表記ゆれに強い正規化(全角半角・ひらがな→カタカナ・空白除去) */
-  const norm = (s) => (s||"").normalize("NFKC").replace(/\s+/g,"")
-    .replace(/[ぁ-ん]/g, ch => String.fromCharCode(ch.charCodeAt(0)+0x60));
-
-  const matchFoods = (v) => {
-    const nq = norm(v);
-    if(!nq) return [];
-    const hit = FOODS.filter(f => norm(f.name).includes(nq));
-    if(hit.length) return hit;
-    /* 「牛丼大盛」→「牛丼 並盛」のように、入力がDB名の先頭語を含む場合も拾う */
-    return FOODS.filter(f => {
-      const head = norm(f.name.split(" ")[0]);
-      return head.length >= 2 && nq.includes(head);
-    });
-  };
-
-  const matches = matchFoods(q);
-  const best = matches[0] || null;
-
-  /* 検索欄への入力でカロリーを自動補完 */
-  const onQChange = (v) => {
-    setQ(v);
-    if(v.trim() === ""){ setKcalTouched(false); setCkcal(""); return; }
-    if(!kcalTouched){
-      const m = matchFoods(v)[0];
-      setCkcal(m ? String(m.kcal) : "");
-    }
-  };
-
-  return (
-    <div className="anim-rise" style={{display:"flex", flexDirection:"column", flex:1}}>
-      <div className="row" style={{gap:10}}>
-        <button onClick={onBack} className="card" aria-label="戻る" style={{padding:"8px 12px", borderRadius:14, fontSize:15}}>◀</button>
-        <h1 style={{fontSize:23, fontWeight:800, margin:0}}>デイリー記録</h1>
-      </div>
-
-      {/* 日付ナビ */}
-      <div className="row" style={{justifyContent:"space-between", marginTop:12}}>
-        <button onClick={()=>shiftDate(-1)} className="card" style={{padding:"8px 16px", borderRadius:999, fontSize:14, fontWeight:800}}>‹ 前日</button>
-        <span style={{fontSize:17, fontWeight:800}}>{dateLabel}</span>
-        <button onClick={()=>shiftDate(1)} disabled={isToday} className="card"
-          style={{padding:"8px 16px", borderRadius:999, fontSize:14, fontWeight:800, opacity:isToday?0.35:1}}>翌日 ›</button>
-      </div>
-
-      {/* 収支サマリー */}
-      <div style={{background:"var(--ink)", color:"#fff", borderRadius:24, padding:"16px 20px", marginTop:12}}>
-        <div className="row" style={{justifyContent:"space-between", alignItems:"baseline"}}>
-          <span style={{fontSize:12, fontWeight:800, color:"rgba(255,255,255,.65)"}}>{dateLabel}の摂取</span>
-          <span style={{fontSize:12, fontWeight:800, color:"rgba(255,255,255,.65)"}}>目標 {target}{burn>0?` + 運動 ${burn}`:""} kcal</span>
-        </div>
-        <div className="row" style={{gap:5, alignItems:"baseline", marginTop:2}}>
-          <span className="bebas" style={{fontSize:40, lineHeight:1}}>{intake}</span>
-          <span style={{fontSize:13, fontWeight:800, color:"rgba(255,255,255,.65)"}}>kcal</span>
-        </div>
-        <div style={{marginTop:10, height:10, borderRadius:999, background:"rgba(255,255,255,.15)", overflow:"hidden"}}>
-          <div style={{height:"100%", width:`${frac*100}%`, background:remain<0?"#FF6B5E":"var(--gold)", borderRadius:999, transition:"width .5s"}}/>
-        </div>
-        <p style={{fontSize:12, fontWeight:800, margin:"8px 0 0", color:remain<0?"#FFB4AC":"rgba(255,255,255,.8)"}}>
-          {remain>=0 ? (isToday ? `あと ${remain} kcal 食べられます` : `${remain} kcal 余裕がありました`) : `${-remain} kcal オーバー`}
-        </p>
-      </div>
-
-      {/* この日の体重 */}
-      <div className="card" style={{padding:"12px 16px", marginTop:10}}>
-        <div className="row" style={{justifyContent:"space-between"}}>
-          <span className="sub" style={{fontSize:12, fontWeight:800}}>⚖️ {dateLabel}の体重</span>
-          {dayWeight && <span style={{fontSize:12, fontWeight:800, color:"var(--teal)"}}>✓ {dayWeight.kg} kg</span>}
-        </div>
-        <div className="row" style={{gap:8, marginTop:8}}>
-          <input className="field" type="number" inputMode="decimal" step="0.1"
-            placeholder={dayWeight ? `${dayWeight.kg} kg(修正できます)` : "例: 65.5"}
-            value={wIn} onChange={e=>setWIn(e.target.value)} style={{marginTop:0, flex:1}}/>
-          <button onClick={saveWeight} style={{padding:"11px 18px", borderRadius:14, background:"var(--ink)", color:"#fff", fontWeight:800, fontSize:14, flexShrink:0}}>
-            {dayWeight ? "修正" : "記録"}
-          </button>
-        </div>
-      </div>
-
-      {/* この日のアクティビティ */}
-      <p className="sub" style={{fontSize:12, fontWeight:800, margin:"16px 0 6px"}}>🔥 {dateLabel}のアクティビティ</p>
-      {dayWorkouts.length === 0 ? (
-        <div className="card" style={{padding:"12px 16px"}}>
-          <p className="sub" style={{fontSize:12, margin:0}}>ワークアウトの記録はありません</p>
-        </div>
-      ) : (
-        <div style={{display:"flex", flexDirection:"column", gap:6}}>
-          {dayWorkouts.map((h,i)=>(
-            <div key={i} className="card row" style={{padding:"11px 16px", borderRadius:18, justifyContent:"space-between"}}>
-              <div>
-                <p style={{fontSize:14, fontWeight:800, margin:0}}>{h.course}</p>
-                <p className="sub" style={{fontSize:11, margin:0}}>{h.minutes}分 ・ 約{h.kcal||0} kcal ・ +{h.xp} XP</p>
-              </div>
-              <button onClick={()=>{ if(window.confirm("この記録を削除しますか?(XPと連続記録は保持されます)")) removeWorkout(h); }}
-                aria-label="削除" className="sub" style={{fontSize:14, padding:"4px 8px"}}>✕</button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* 食事タイプ */}
-      <p className="sub" style={{fontSize:12, fontWeight:800, margin:"16px 0 6px"}}>🍽 {dateLabel}の食事を追加</p>
-      <div className="row" style={{gap:6}}>
-        {MEAL_TYPES.map(m=>(
-          <button key={m} onClick={()=>setMealType(m)} className={"mealtab"+(mealType===m?" on":"")}>{m}</button>
-        ))}
-      </div>
-
-      {/* 検索・入力(kcal自動補完) */}
-      <input className="field" placeholder="食べたものを入力(例:ごはん、牛丼、ビール)" value={q} onChange={e=>onQChange(e.target.value)} style={{marginTop:10}}/>
-      {added && <p className="anim-pop" style={{fontSize:12, fontWeight:800, color:"var(--teal)", margin:"8px 0 0", textAlign:"center"}}>✓ 「{added}」を{dateLabel}の{mealType}に追加しました</p>}
-
-      {/* 入力中:この内容で追加 */}
-      {q.trim() !== "" && (
-        <div className="card" style={{padding:"12px 14px", marginTop:10}}>
-          {best && !kcalTouched
-            ? <p className="sub" style={{fontSize:11, margin:"0 0 6px"}}>💡 「{best.name}」の目安 <b style={{color:"var(--accent)"}}>{best.kcal} kcal</b> を自動入力しました(修正できます)</p>
-            : !best && <p className="sub" style={{fontSize:11, margin:"0 0 6px"}}>データベースに近い候補がありません。kcalを入力してください</p>}
-          <div className="row" style={{gap:6}}>
-            <span style={{flex:2, fontSize:14, fontWeight:800, padding:"11px 4px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{q.trim()}</span>
-            <input className="field" type="number" inputMode="numeric" placeholder="kcal" value={ckcal}
-              onChange={e=>{ setCkcal(e.target.value); setKcalTouched(true); }} style={{marginTop:0, flex:1}}/>
-            <button onClick={()=>{ addFood(q.trim(), Number(ckcal)); setQ(""); setCkcal(""); setKcalTouched(false); }}
-              style={{padding:"11px 16px", borderRadius:14, background:"var(--accent)", color:"#fff", fontWeight:800, fontSize:14, flexShrink:0}}>追加</button>
-          </div>
-        </div>
-      )}
-
-      {/* 食品リスト */}
-      {q.trim() !== "" ? (
-        <div className="row" style={{flexWrap:"wrap", gap:6, marginTop:10}}>
-          {matches.map((f,i)=>(
-            <button key={i} className="foodchip" onClick={()=>{ addFood(f.name, f.kcal); setQ(""); setCkcal(""); setKcalTouched(false); }}>{f.name} <span style={{color:"var(--accent)"}}>{f.kcal}</span></button>
-          ))}
-        </div>
-      ) : (
-        <div style={{marginTop:6}}>
-          {FOOD_CATS.map(cat=>(
-            <div key={cat}>
-              <p className="sub" style={{fontSize:12, fontWeight:800, margin:"12px 0 6px"}}>{cat}</p>
-              <div className="row" style={{flexWrap:"wrap", gap:6}}>
-                {FOODS.filter(f=>f.cat===cat).map((f,i)=>(
-                  <button key={i} className="foodchip" onClick={()=>addFood(f.name, f.kcal)}>{f.name} <span style={{color:"var(--accent)"}}>{f.kcal}</span></button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* この日のログ */}
-      {dayMeals.length>0 && (
-        <>
-          <p className="sub" style={{fontSize:12, fontWeight:800, margin:"18px 0 6px"}}>{dateLabel}食べたもの</p>
-          <div style={{display:"flex", flexDirection:"column", gap:6, paddingBottom:8}}>
-            {MEAL_TYPES.map(mt=>{
-              const items = dayMeals.filter(m=>m.meal===mt);
-              if(items.length===0) return null;
-              return (
-                <div key={mt} className="card" style={{padding:"10px 14px", borderRadius:18}}>
-                  <p className="sub" style={{fontSize:11, fontWeight:800, margin:"0 0 4px"}}>{mt} — {items.reduce((a,m)=>a+m.kcal,0)} kcal</p>
-                  {items.map(m=>(
-                    <div key={m.id} className="row" style={{justifyContent:"space-between", padding:"3px 0"}}>
-                      <span style={{fontSize:13, fontWeight:700}}>{m.name}</span>
-                      <span className="row" style={{gap:8}}>
-                        <span style={{fontSize:13, fontWeight:800, color:"var(--accent)"}}>{m.kcal}</span>
-                        <button onClick={()=>removeFood(m.id)} aria-label="削除" className="sub" style={{fontSize:13}}>✕</button>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      <p className="sub" style={{fontSize:10, lineHeight:1.6, margin:"14px 0 4px"}}>
-        ※ カロリーは一般的な目安による推定値です。正確な管理が必要な場合は栄養成分表示をご確認ください。
-      </p>
-    </div>
-  );
-}
-
-/* ---------- 体重推移グラフ ---------- */
-function WeightChart({weights}){
-  const ws = [...(weights||[])].sort((a,b)=>a.date<b.date?-1:1).slice(-30);
-  if(ws.length === 0) return <p className="sub" style={{fontSize:12, margin:0}}>まだ体重の記録がありません。ホーム画面から今日の体重を記録してみましょう</p>;
-  if(ws.length === 1) return <p className="sub" style={{fontSize:12, margin:0}}>現在 <b style={{color:"var(--ink)"}}>{ws[0].kg} kg</b>。2日分たまるとグラフが表示されます</p>;
-
-  const W=320, H=130, padL=34, padR=14, padT=16, padB=22;
-  const kgs = ws.map(w=>w.kg);
-  const rawMin = Math.min(...kgs), rawMax = Math.max(...kgs);
-  const span = Math.max(1, rawMax-rawMin);
-  const min = rawMin - span*0.15, max = rawMax + span*0.15;
-  const x = (i) => padL + (i/(ws.length-1)) * (W-padL-padR);
-  const y = (kg) => padT + (1-(kg-min)/(max-min)) * (H-padT-padB);
-  const pts = ws.map((w,i)=>`${x(i)},${y(w.kg)}`).join(" ");
-  const first = ws[0], last = ws[ws.length-1];
-  const diff = Math.round((last.kg-first.kg)*10)/10;
-  const lbl = (d)=>{ const t=new Date(d+"T00:00:00"); return `${t.getMonth()+1}/${t.getDate()}`; };
-
-  return (
-    <div>
-      <div className="row" style={{justifyContent:"space-between", marginBottom:6}}>
-        <span style={{fontSize:14, fontWeight:800}}>現在 {last.kg} kg</span>
-        <span style={{fontSize:12, fontWeight:800, color:diff<0?"var(--teal)":diff>0?"var(--accent)":"var(--sub)"}}>
-          {lbl(first.date)}から {diff>0?"+":""}{diff} kg
-        </span>
-      </div>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%", height:"auto", display:"block"}}>
-        {[rawMax, rawMin].map((v,i)=>(
-          <g key={i}>
-            <line x1={padL} x2={W-padR} y1={y(v)} y2={y(v)} stroke="var(--line)" strokeDasharray="3 4" strokeWidth="1"/>
-            <text x={padL-5} y={y(v)+3.5} fontSize="9" fontWeight="700" fill="#6B7A73" textAnchor="end">{v}</text>
-          </g>
-        ))}
-        <polyline points={pts} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
-        {ws.map((w,i)=>(
-          <circle key={i} cx={x(i)} cy={y(w.kg)} r={i===ws.length-1?4:2.5} fill={i===ws.length-1?"var(--accent)":"#fff"} stroke="var(--accent)" strokeWidth="2"/>
-        ))}
-        <text x={x(0)} y={H-6} fontSize="9" fontWeight="700" fill="#6B7A73" textAnchor="start">{lbl(first.date)}</text>
-        <text x={x(ws.length-1)} y={H-6} fontSize="9" fontWeight="700" fill="#6B7A73" textAnchor="end">{lbl(last.date)}</text>
-      </svg>
     </div>
   );
 }
@@ -1474,12 +709,6 @@ function Stats({data, onBack}){
         <p style={{fontSize:12, color:"rgba(255,255,255,.6)", margin:"2px 0 0"}}>累計 {data.xp} XP</p>
       </div>
 
-      {/* 体重推移 */}
-      <p className="sub" style={{fontSize:13, fontWeight:800, margin:"18px 0 8px"}}>体重の推移(直近30回)</p>
-      <div className="card" style={{padding:16}}>
-        <WeightChart weights={data.weights}/>
-      </div>
-
       {/* メラの成長 */}
       <p className="sub" style={{fontSize:13, fontWeight:800, margin:"18px 0 8px"}}>メラの成長</p>
       <div className="card" style={{padding:"14px 16px"}}>
@@ -1503,8 +732,8 @@ function Stats({data, onBack}){
         })}
       </div>
 
-      <div className="grid2" style={{marginTop:12}}>
-        {[["合計回数",data.totalWorkouts,"回"],["合計時間",data.totalMinutes,"分"],["最長連続",data.bestStreak,"日"],["累計消費",data.totalBurn||0,"kcal"]].map((s,i)=>(
+      <div className="grid3" style={{marginTop:12}}>
+        {[["合計回数",data.totalWorkouts,"回"],["合計時間",data.totalMinutes,"分"],["最長連続",data.bestStreak,"日"]].map((s,i)=>(
           <div key={i} className="card" style={{padding:"12px 8px", textAlign:"center"}}>
             <p className="sub" style={{fontSize:11, fontWeight:800, margin:0}}>{s[0]}</p>
             <p style={{margin:"2px 0 0"}}>
@@ -1540,10 +769,7 @@ function Stats({data, onBack}){
                   <p style={{fontSize:14, fontWeight:800, margin:0}}>{h.course}</p>
                   <p className="sub" style={{fontSize:11, margin:0}}>{h.date}</p>
                 </div>
-                <span style={{textAlign:"right"}}>
-                  <span style={{fontSize:14, fontWeight:800, color:"var(--gold)", display:"block"}}>+{h.xp} XP</span>
-                  {h.kcal>0 && <span style={{fontSize:11, fontWeight:800, color:"var(--teal)"}}>約{h.kcal} kcal</span>}
-                </span>
+                <span style={{fontSize:14, fontWeight:800, color:"var(--gold)"}}>+{h.xp} XP</span>
               </div>
             ))}
           </div>
